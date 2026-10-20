@@ -12,10 +12,10 @@ set -euo pipefail
 module_name="${GROMACS_MODULE:-gromacs/2026.3}"
 binary="${GROMACS_BINARY:-gmx_mpi}"
 mode="${GROMACS_GPU_MODE:-cpu}"
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+case_root="${GROMACS_CASE_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/cases/argon8}"
 run="$GROMACS_RUN_ROOT/argon-${mode}-${SLURM_JOB_ID:-manual-$$}"
 mkdir -p "$run"
-cp "$root"/cases/argon8/{argon.gro,topol.top,md.mdp} "$run/"
+cp "$case_root"/{argon.gro,topol.top,md.mdp} "$run/"
 
 module purge
 module load "$module_name"
