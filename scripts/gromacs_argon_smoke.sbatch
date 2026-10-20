@@ -28,7 +28,7 @@ cd "$run"
 "$gmx" grompp -f md.mdp -c argon.gro -p topol.top -o argon.tpr \
     >grompp.log 2>&1
 
-mdrun_args=(-s argon.tpr -deffnm argon -ntmpi 1 -ntomp "${SLURM_CPUS_PER_TASK:-2}")
+mdrun_args=(-s argon.tpr -deffnm argon -ntomp "${SLURM_CPUS_PER_TASK:-2}")
 if [ "$mode" = hip ]; then
     mdrun_args+=(-nb gpu -pme gpu -npme 1)
 elif [ "$mode" != cpu ]; then
