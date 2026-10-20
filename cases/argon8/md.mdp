@@ -7,7 +7,6 @@ nstenergy       = 1
 nstlog          = 1
 cutoff-scheme   = Verlet
 nstlist         = 10
-ns_type         = grid
 coulombtype     = Cut-off
 rcoulomb        = 0.9
 rvdw            = 0.9
