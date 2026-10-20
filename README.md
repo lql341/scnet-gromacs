@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.1.0
+Current release: 0.1.1
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -23,7 +23,8 @@ rebuilding the software. See the [official 2026.4 release notes](https://manual.
 - module identity and `gmx_mpi --version`;
 - compiler, MPI, HIP/DTK, GPU FFT and target architecture metadata;
 - deterministic CPU `grompp` + `mdrun` on the bundled eight-atom Argon case;
-- optional HIP/DCU `mdrun` with explicit `-nb gpu -pme gpu -npme 1`;
+- optional HIP/DCU `mdrun` with explicit `-nb gpu` for the bundled no-charge
+  case; add PME GPU options only when the system actually uses PME;
 - finite energy output and a compact final-state checksum;
 - scheduler completion and workload exit status.
 
@@ -38,12 +39,9 @@ cancellation. SSH is only for bounded script upload and log diagnosis.
 
 ```bash
 bash scripts/validate.sh
-# On a compute node:
-FOAM_UNUSED= # no local GROMACS execution
-bash scripts/gromacs_module_probe.sh
-bash scripts/gromacs_argon_smoke.sbatch
 ```
 
+Submit the scripts through `scnet-hpc` OpenAPI on the selected compute queue.
 The scripts accept:
 
 ```text
@@ -55,6 +53,12 @@ GROMACS_RUN_ROOT   unique writable run root
 
 Do not infer GPU support from a module name alone. The compute-node probe must
 show visible devices and the binary must report HIP support.
+
+The smoke harness checks the GROMACS 2026.x completion message
+`Writing final coordinates.` (and accepts the older `Finished mdrun` wording),
+parses multi-column `energy.xvg` data, and records a final checksum. A scheduler
+`COMPLETED` state is not sufficient unless the workload also writes
+`status=passed`.
 
 ## DCU porting lessons retained
 

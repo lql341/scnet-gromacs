@@ -25,17 +25,31 @@ printf 'host=%s\nmodule=%s\nbinary=%s\nmode=%s\n' \
 gmx="$binary"
 
 cd "$run"
+if [ "$mode" = hip ]; then
+    if command -v rocminfo >/dev/null 2>&1; then
+        rocminfo 2>&1 | grep -E 'Name:.*gfx|Marketing Name|Agent [0-9]+' \
+            | head -40 >device.txt || true
+    else
+        printf '%s\n' 'rocminfo=unavailable' >device.txt
+    fi
+fi
 "$gmx" grompp -f md.mdp -c argon.gro -p topol.top -o argon.tpr \
     >grompp.log 2>&1
 
 mdrun_args=(-s argon.tpr -deffnm argon -ntomp "${SLURM_CPUS_PER_TASK:-2}")
 if [ "$mode" = hip ]; then
-    mdrun_args+=(-nb gpu -pme gpu -npme 1)
+    # This no-charge Argon case has no PME electrostatics; offload the
+    # non-bonded path without forcing an unsupported PME GPU path.
+    mdrun_args+=(-nb gpu)
 elif [ "$mode" != cpu ]; then
     echo "unsupported GROMACS_GPU_MODE=$mode" >&2
     exit 2
 fi
 "$gmx" mdrun "${mdrun_args[@]}" >mdrun.log 2>&1
+
+if [ "$mode" = hip ]; then
+    grep -Eq '[0-9]+ GPU selected for this run\.' mdrun.log
+fi
 
 "$gmx" energy -f argon.edr -o energy.xvg <<'EOF' >energy.log 2>&1
 Potential
@@ -44,8 +58,18 @@ Temperature
 0
 EOF
 
-grep -Eq '^[[:space:]]*[0-9-]+[[:space:]]+[-+0-9.eE]+$' energy.xvg
-grep -q 'Finished mdrun' mdrun.log
-awk 'NF >= 2 && $1 !~ /^[@#]/ { if ($2 != $2) exit 1 }' energy.xvg
+grep -Eq 'Writing final coordinates\.|Finished mdrun' mdrun.log
+awk '
+  $0 !~ /^[@#]/ && NF >= 2 {
+      seen = 1
+      for (i = 1; i <= NF; ++i)
+          if ($i != $i || $i !~ /^[-+0-9.eE]+$/)
+              exit 1
+  }
+  END { exit seen ? 0 : 1 }
+' energy.xvg
 sha256sum argon.gro argon.tpr energy.xvg | tee -a result.txt
+if [ "$mode" = hip ]; then
+    cat device.txt >>result.txt
+fi
 echo 'status=passed' | tee -a result.txt

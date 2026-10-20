@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.1.0
+当前版本：0.1.1
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -21,7 +21,8 @@ case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检
 - module 身份和 `gmx_mpi --version`；
 - 编译器、MPI、HIP/DTK、GPU FFT 和目标架构信息；
 - bundled 八原子 Argon case 的 CPU `grompp + mdrun`；
-- 可选 HIP/DCU `mdrun`，显式使用 `-nb gpu -pme gpu -npme 1`；
+- 可选 HIP/DCU `mdrun`；bundled 无电荷 case 显式使用 `-nb gpu`，只有体系
+  实际启用 PME 时才增加 PME GPU 参数；
 - 有限能量输出和紧凑的最终状态 checksum；
 - 调度器终态和 workload 退出码。
 
@@ -35,12 +36,9 @@ CPU 运行是数值 oracle。GPU 运行只证明集成和运行时，不宣称�
 
 ```bash
 bash scripts/validate.sh
-# 计算节点上：
-bash scripts/gromacs_module_probe.sh
-bash scripts/gromacs_argon_smoke.sbatch
 ```
 
-可设置：
+应通过 `scnet-hpc` OpenAPI 在目标计算队列提交这些脚本。可设置：
 
 ```text
 GROMACS_MODULE     module 名称，默认 gromacs/2026.3
@@ -51,6 +49,11 @@ GROMACS_RUN_ROOT   唯一可写运行目录
 
 不能只根据 module 名称判断 GPU 可用；必须在计算节点确认设备可见，并确认二进制
 报告 HIP 支持。
+
+smoke harness 检查 GROMACS 2026.x 的完成标记
+`Writing final coordinates.`（同时兼容旧版 `Finished mdrun`），按多列
+`energy.xvg` 数据检查有限数值，并记录最终 checksum。调度器显示
+`COMPLETED` 还不够，workload 也必须写出 `status=passed`。
 
 ## 提炼的 DCU 移植经验
 
