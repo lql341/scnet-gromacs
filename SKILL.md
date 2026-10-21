@@ -11,8 +11,10 @@ SCNet. Read [references/validation.md](references/validation.md) first.
 ## Rules
 
 - Never run GROMACS validation on the agent workstation.
-- Prefer `scnet-hpc` OpenAPI for queue, submission, wait, status and cancellation.
-- Use SSH only for bounded script upload and logs.
+- Prefer `scripts/run_openapi.py`; it uses `scnet-hpc` OpenAPI for remote
+  mkdir, upload, submit, wait, job details and artifact download.
+- Use SSH only when OpenAPI cannot expose a needed fact, and then only for
+  bounded diagnosis.
 - Use a unique run directory and preserve all prior results.
 - Treat module names as hints; load and inspect `gmx_mpi --version` on the target node.
 - Keep CPU as the numerical oracle and treat GPU as a separate backend/runtime check.
@@ -24,6 +26,13 @@ SCNet. Read [references/validation.md](references/validation.md) first.
 - Compare CPU and HIP energies with the documented tolerance script; do not
   require bitwise equality.
 - Propagate nonzero `grompp`, `mdrun`, checker and scheduler statuses.
+
+## Execution profiles
+
+Copy `clusters/_template.conf` to a private `clusters/<profile>.conf` and set the
+CPU/DCU queues, CPU/HIP modules, CPU count, DCU count and walltime. The template
+is Z100/DCU-oriented but is not live availability evidence. The runner passes
+`--dcus` only for HIP jobs and refuses existing remote run roots.
 
 ## Evidence gates
 

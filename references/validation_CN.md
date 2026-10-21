@@ -24,9 +24,26 @@
 CPU 运行是 oracle。记录完整 `gmx_mpi --version`、命令行、资源元组、调度器
 终态、退出码、输入 checksum、能量摘要和最终 checksum。
 
-HIP 模式记录设备可见性、`GMX_GPU`、HIP runtime 和目标架构。PME case 必须
+HIP 模式记录设备可见性、`GMX_GPU`、HIP runtime 和目标架构。可选的
+`GROMACS_EXPECT_GPU_ARCH`（例如 Z100 的 `gfx906`）会在 `rocminfo` 未显示该架构时
+让 smoke 失败。PME case 必须
 明确出现日志行 `PME tasks will do all aspects on the GPU`；仅有泛泛的 GPU/HIP
 字样不算。
+
+## OpenAPI 执行路径
+
+`scripts/run_openapi.py` 是默认编排路径。它调用已安装的 `scnet-hpc` CLI 的
+`--backend openapi`，完成远端 mkdir、upload、submit、限时 wait、详细 job 检查和
+显式 artifact 下载；不使用 SSH，并拒绝复用已存在的远端 run root 或本地下载目录。
+
+runner 读取从 `clusters/_template.conf` 复制的私有 profile，或接受显式的队列/
+module/资源参数。profile 中的 `GPU_ARCH` 会传给 HIP 作业作为可选架构门禁，但不
+替代实际设备探针。对 Hygon Z100，它只给 HIP 作业传 DCU 数量；gfx906 是否可见、
+PP/PME 是否真正在设备上执行，仍由目标节点探针和日志决定，profile 只是站点提示，
+不是实时证据。
+
+`--mode both` 会提交 CPU 和 HIP，下载两套结果并运行容差检查；调度器状态、平台
+退出码和 workload `status=passed` 仍分别检查。
 
 ## CPU/HIP 容差契约
 
@@ -62,6 +79,8 @@ HIP 模式记录设备可见性、`GMX_GPU`、HIP runtime 和目标架构。PME 
 昆山实测 module 为 GROMACS 2026.3，编译器 GCC 16.2，OpenMPI 5.0.11，
 HIP/DTK 26.04，rocFFT 1.0.28，目标架构 gfx906。上游当前版本是 2026.4，
 因此 skill 验证已安装的 2026.3，不把 patch 差异直接当作必须重编的理由。
+OpenAPI 优先 runner 已在 Argon 和 PME case 上完成端到端实测，CPU/HIP 比较在
+独立调度作业上通过。
 
 ## DCU 通用经验
 

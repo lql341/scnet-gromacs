@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 (2026-10-21)
+
+- Add an OpenAPI-first runner that uses scnet-hpc for remote mkdir, upload,
+  submit, bounded wait, job details and artifact download; SSH is no longer
+  required in the normal execution path.
+- Run CPU and HIP together, download both result sets and apply the tolerance
+  checker in one command.
+- Add Z100/DCU-oriented profile defaults for CPU/DCU queues, modules, CPU/DCU
+  counts and walltime, while keeping site-specific values out of the repository.
+- Validate the runner end to end on both the Argon and PME cases.
+
 ## 0.2.0 (2026-10-21)
 
 - Add a PME-enabled ion-pair case and a `-nb gpu -pme gpu` HIP path that

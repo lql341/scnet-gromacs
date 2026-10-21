@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.2.0
+Current release: 0.3.0
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -57,6 +57,7 @@ GROMACS_MODULE     module name, default gromacs/2026.3
 GROMACS_BINARY     binary name, default gmx_mpi
 GROMACS_GPU_MODE   cpu or hip, default cpu
 GROMACS_GPU_PME    1 to add -pme gpu, default 0; only for a PME-enabled case
+GROMACS_EXPECT_GPU_ARCH  optional expected gfx name, e.g. gfx906
 GROMACS_NPME       optional -npme value; only for a real multi-rank job
 GROMACS_CASE_ROOT  case directory, default <repo>/cases/argon8
 GROMACS_CASE_GRO   input coordinate file, default argon.gro
@@ -72,6 +73,42 @@ set `GROMACS_CASE_ROOT` to `cases/ionpair_pme`, `GROMACS_CASE_GRO=ionpair.gro`,
 On a single MPI rank, use `-pme gpu` without `-npme`. The installed GROMACS
 rejects `-npme` when only one rank is requested; set `GROMACS_NPME` only when
 the job really has multiple ranks.
+
+## OpenAPI-first runner
+
+The preferred execution path is `scripts/run_openapi.py`. It calls the installed
+`scnet-hpc` CLI with `--backend openapi` for remote directory creation, script
+and case upload, submission, bounded wait, job-detail checking and artifact
+download. The normal path does not use SSH and does not implement a second
+credential or transport layer.
+
+```bash
+python3 scripts/run_openapi.py \
+  --cluster <scnet-hpc-profile> \
+  --profile clusters/<scnet-hpc-profile>.conf \
+  --run-root /absolute/new/remote/run-root \
+  --case ionpair_pme \
+  --mode both \
+  --download-dir ./out/gromacs-pme
+```
+
+`--mode both` submits one CPU job and one HIP job, waits for both, downloads
+`result.txt`, version, checksum, energy and run logs, and applies
+`compare_gromacs_energy.py`. `--mode cpu` (the default) or `--mode hip` runs one
+backend.
+The runner refuses an existing remote run root or local download directory.
+
+Copy [clusters/_template.conf](clusters/_template.conf) to a private
+`clusters/<profile>.conf` and set the CPU/DCU queue, CPU/HIP module, CPU count,
+DCU count and walltime. The template is Z100/DCU-oriented; it is a hint, not
+live availability evidence. Alternatively pass `--cpu-queue`, `--hip-queue`,
+`--cpu-module`, `--hip-module`, `--cpus`, `--dcus` and `--walltime` directly.
+The optional `GPU_ARCH` profile field is passed to the compute-node device check;
+for Z100 set `GPU_ARCH="gfx906"`.
+
+OpenAPI credentials are configured only through `scnet-hpc`; never put AK/SK,
+private keys or site paths in this repository. If OpenAPI cannot expose a fact,
+use SSH only for bounded diagnosis.
 
 The smoke harness checks the GROMACS 2026.x completion message
 `Writing final coordinates.` (and accepts the older `Finished mdrun` wording),
@@ -112,8 +149,10 @@ The installed Kunshan module was exercised on gfx906 with GROMACS 2026.3,
 GCC 16.2, OpenMPI 5.0.11, DTK 26.04, HIP 6.3.26113 and rocFFT 1.0.28. Both the
 Argon CPU/HIP smoke and the ion-pair PME CPU/HIP smoke completed with
 `status=passed` and passed the tolerance checker. The PME run selected one GPU
-and reported PME work on the GPU. These are single-node, single-rank, 20-step
-smoke results; they do not cover performance or larger systems.
+and reported PME work on the GPU. The OpenAPI-first runner was also exercised
+end to end on both cases, including remote upload, submission, wait, artifact
+download and comparison. These are single-node, single-rank, 20-step smoke
+results; they do not cover performance or larger systems.
 
 ## DCU porting lessons retained
 

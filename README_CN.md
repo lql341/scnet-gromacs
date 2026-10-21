@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.2.0
+当前版本：0.3.0
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -50,6 +50,7 @@ GROMACS_MODULE     module 名称，默认 gromacs/2026.3
 GROMACS_BINARY     可执行文件，默认 gmx_mpi
 GROMACS_GPU_MODE   cpu 或 hip，默认 cpu
 GROMACS_GPU_PME    设为 1 时增加 -pme gpu，默认 0；仅用于 PME case
+GROMACS_EXPECT_GPU_ARCH  可选的期望 gfx 名称，例如 gfx906
 GROMACS_NPME       可选 -npme 值；仅用于真正的多 rank 作业
 GROMACS_CASE_ROOT  case 目录，默认 <repo>/cases/argon8
 GROMACS_CASE_GRO   输入坐标文件，默认 argon.gro
@@ -64,6 +65,37 @@ GROMACS_RUN_ROOT   唯一可写运行目录
 
 单 MPI rank 使用 `-pme gpu` 时不要加 `-npme`。已安装的 GROMACS 在只请求
 一个 rank 时会拒绝 `-npme`；只有真正的多 rank 作业才设置 `GROMACS_NPME`。
+
+## OpenAPI 优先的 runner
+
+首选执行路径是 `scripts/run_openapi.py`。它通过已安装的 `scnet-hpc` CLI 的
+`--backend openapi` 完成远端目录创建、脚本/case 上传、提交、限时等待、作业详情
+检查和结果下载；正常路径不使用 SSH，也不实现第二套凭证或传输层。
+
+```bash
+python3 scripts/run_openapi.py \
+  --cluster <scnet-hpc-profile> \
+  --profile clusters/<scnet-hpc-profile>.conf \
+  --run-root /absolute/new/remote/run-root \
+  --case ionpair_pme \
+  --mode both \
+  --download-dir ./out/gromacs-pme
+```
+
+`--mode both` 提交一个 CPU 作业和一个 HIP 作业，等待两者结束，下载
+`result.txt`、版本、checksum、能量和运行日志，并调用
+`compare_gromacs_energy.py`。`--mode cpu`（默认）或 `--mode hip` 只运行一个后端。
+runner 会拒绝已存在的远端 run root 或本地下载目录。
+
+把 [clusters/_template.conf](clusters/_template.conf) 复制为私有的
+`clusters/<profile>.conf`，填写 CPU/DCU 队列、CPU/HIP module、CPU 数、DCU 数和
+walltime。模板面向 Z100/DCU，但只是提示，不是实时可用性证据。也可以直接传
+`--cpu-queue`、`--hip-queue`、`--cpu-module`、`--hip-module`、`--cpus`、
+`--dcus`、`--walltime`。可选的 `GPU_ARCH` profile 字段会传给计算节点设备检查；
+Z100 设置为 `GPU_ARCH="gfx906"`。
+
+OpenAPI 凭证只通过 `scnet-hpc` 配置；不要在仓库中写入 AK/SK、私钥或站点路径。
+如果 OpenAPI 无法提供某个事实，SSH 只用于有限的诊断。
 
 smoke harness 检查 GROMACS 2026.x 的完成标记
 `Writing final coordinates.`（同时兼容旧版 `Finished mdrun`），按多列
@@ -98,8 +130,9 @@ python3 scripts/compare_gromacs_energy.py CPU_RUN_DIR HIP_RUN_DIR \
 已安装的昆山 module 在 gfx906 上实测：GROMACS 2026.3、GCC 16.2、
 OpenMPI 5.0.11、DTK 26.04、HIP 6.3.26113、rocFFT 1.0.28。Argon CPU/HIP
 smoke 和离子对 PME CPU/HIP smoke 都以 `status=passed` 完成，并通过容差检查。
-PME 运行选择 1 个 GPU，并报告 PME 在 GPU 上执行。这些均为单节点、单 rank、
-20 步 smoke 结果，不覆盖性能或更大体系。
+PME 运行选择 1 个 GPU，并报告 PME 在 GPU 上执行。OpenAPI 优先 runner 也在两个
+case 上完成端到端实测，包括远端上传、提交、等待、artifact 下载和比较。这些均为
+单节点、单 rank、20 步 smoke 结果，不覆盖性能或更大体系。
 
 ## 提炼的 DCU 移植经验
 

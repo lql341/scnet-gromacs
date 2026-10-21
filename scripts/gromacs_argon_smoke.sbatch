@@ -14,6 +14,7 @@ module_name="${GROMACS_MODULE:-gromacs/2026.3}"
 binary="${GROMACS_BINARY:-gmx_mpi}"
 mode="${GROMACS_GPU_MODE:-cpu}"
 gpu_pme="${GROMACS_GPU_PME:-0}"
+gpu_arch="${GROMACS_EXPECT_GPU_ARCH:-}"
 case_root="${GROMACS_CASE_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/cases/argon8}"
 gro="${GROMACS_CASE_GRO:-argon.gro}"
 deffnm="${GROMACS_DEFFNM:-argon}"
@@ -32,8 +33,8 @@ esac
 
 module purge
 module load "$module_name"
-printf 'host=%s\nmodule=%s\nbinary=%s\nmode=%s\npme_gpu=%s\ncase=%s\n' \
-    "$(hostname)" "$module_name" "$binary" "$mode" "$gpu_pme" "$gro" \
+printf 'host=%s\nmodule=%s\nbinary=%s\nmode=%s\npme_gpu=%s\ngpu_arch=%s\ncase=%s\n' \
+    "$(hostname)" "$module_name" "$binary" "$mode" "$gpu_pme" "$gpu_arch" "$gro" \
     | tee "$run/result.txt"
 "$binary" --version >"$run/version.txt" 2>&1
 gmx="$binary"
@@ -72,6 +73,9 @@ fi
 
 if [ "$mode" = hip ]; then
     grep -Eq '[0-9]+ GPU selected for this run\.' mdrun.log
+    if [ -n "$gpu_arch" ]; then
+        grep -Eq "Name:.*${gpu_arch}" device.txt
+    fi
     if [ "$gpu_pme" = 1 ]; then
         grep -Eq 'PME tasks? will do .* on the GPU' mdrun.log
     fi

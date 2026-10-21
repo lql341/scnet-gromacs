@@ -28,9 +28,31 @@ resource tuple, scheduler state, exit code, input checksums, energy summary and
 final checksum.
 
 For HIP mode, record visible devices, `GMX_GPU`, HIP runtime and target
-architecture. For the PME case, require the explicit log line
+architecture. An optional `GROMACS_EXPECT_GPU_ARCH` (for example `gfx906` on
+Z100) makes the smoke fail when `rocminfo` does not show that architecture. For
+the PME case, require the explicit log line
 `PME tasks will do all aspects on the GPU`; a generic GPU/HIP mention is not
 enough.
+
+## OpenAPI execution path
+
+`scripts/run_openapi.py` is the default orchestration path. It invokes the
+installed `scnet-hpc` CLI with `--backend openapi` for remote mkdir, upload,
+submit, bounded wait, detailed job check and explicit artifact download. It
+does not use SSH, and it refuses to reuse an existing remote run root or local
+download directory.
+
+The runner reads a private profile copied from `clusters/_template.conf` or
+accepts explicit queue/module/resource arguments. A profile `GPU_ARCH` value is
+passed to the HIP job as an optional architecture gate; it does not replace the
+actual device probe. For Hygon Z100 it passes the
+DCU count to OpenAPI only for the HIP job; the actual node probe still decides
+whether gfx906 is visible and whether PP/PME work runs on the device. A profile
+is a site hint, not live evidence.
+
+`--mode both` submits CPU and HIP, downloads both result sets and runs the
+tolerance checker. The scheduler state, platform exit status and workload
+`status=passed` are still checked separately.
 
 ## CPU/HIP tolerance contract
 
@@ -71,7 +93,9 @@ systems, longer trajectories, other precisions or other architectures.
 The measured Kunshan module observation is GROMACS 2026.3 with GCC 16.2,
 OpenMPI 5.0.11, HIP/DTK 26.04, rocFFT 1.0.28 and gfx906. The upstream current
 release is 2026.4, so this skill validates the installed 2026.3 module rather
-than treating a patch-level difference as a rebuild requirement.
+than treating a patch-level difference as a rebuild requirement. The
+OpenAPI-first runner was exercised end to end on the Argon and PME cases, with
+CPU/HIP comparisons passing on separate scheduler jobs.
 
 ## DCU porting checklist
 
