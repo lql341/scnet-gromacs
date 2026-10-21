@@ -11,9 +11,11 @@ or an existing site workflow. They are the evidence-producing artifacts.
 
 `run_openapi.py` is an optional convenience wrapper. It calls the installed
 `scnet-hpc` CLI with `--backend openapi` to create a fresh remote directory,
-upload the scripts and case, submit CPU/HIP jobs, wait, check job details,
-download artifacts and run the tolerance checker. It does not implement a
-second transport or credential layer.
+upload the scripts and case, preflight the queue/walltime, submit CPU/HIP jobs,
+wait, check job details, download artifacts and run the tolerance checker. On
+failure it best-effort downloads available application artifacts and scheduler
+stdout/stderr into the local download directory. It does not implement a second
+transport or credential layer.
 
 It is deliberately outside `scripts/` so the core compute-node path stays small
 and stable. If `scnet-hpc` changes its CLI, update this wrapper only; the

@@ -14,8 +14,16 @@ import re
 import sys
 from pathlib import Path
 
-TERMS = ("Potential", "Kinetic En.", "Temperature")
-ENERGY_TERMS = {"Potential", "Kinetic En."}
+DEFAULT_TERMS = ("Potential", "Kinetic En.", "Temperature")
+TERM_LEGENDS = {
+    "Potential": "Potential",
+    "Kinetic-En.": "Kinetic En.",
+    "Temperature": "Temperature",
+    "LJ-(SR)": "LJ (SR)",
+    "Coulomb-(SR)": "Coulomb (SR)",
+    "Coul.-recip.": "Coul. recip.",
+    "Total-Energy": "Total Energy",
+}
 LEGEND_RE = re.compile(r'^@\s+s(\d+)\s+legend\s+"(.*)"\s*$')
 REQUIRED_INPUTS = {"topol.top", "md.mdp"}
 
@@ -63,7 +71,17 @@ def read_input_hashes(run_dir):
     return hashes
 
 
-def parse_energy(path):
+def parse_terms(result):
+    raw = result.get("energy_terms", "")
+    if not raw:
+        return DEFAULT_TERMS
+    terms = tuple(term.strip() for term in raw.split(",") if term.strip())
+    if not terms:
+        return DEFAULT_TERMS
+    return tuple(TERM_LEGENDS.get(term, term) for term in terms)
+
+
+def parse_energy(path, terms):
     if not path.is_file():
         raise CompareError("{} is missing".format(path))
 
@@ -97,15 +115,16 @@ def parse_energy(path):
     if any(len(row) != width for row in rows):
         raise CompareError("{} has inconsistent row widths".format(path))
 
+    wanted = set(terms)
     columns = {}
     for index, name in legends.items():
-        if name in TERMS:
+        if name in wanted:
             if index + 1 >= width:
                 raise CompareError(
                     "{} legend {!r} has no matching data column".format(path, name)
                 )
             columns[name] = [row[index + 1] for row in rows]
-    missing = [term for term in TERMS if term not in columns]
+    missing = [term for term in terms if term not in columns]
     if missing:
         raise CompareError(
             "{} is missing energy columns: {}".format(path, ", ".join(missing))
@@ -164,6 +183,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
+        results = {}
         for run_dir, expected_mode in (
             (args.cpu_run, "cpu"),
             (args.hip_run, "hip"),
@@ -171,6 +191,7 @@ def main(argv=None):
             if not run_dir.is_dir():
                 raise CompareError("{} is not a directory".format(run_dir))
             result = read_kv(run_dir / "result.txt")
+            results[expected_mode] = result
             if result.get("status") != "passed":
                 raise CompareError(
                     "{} did not write status=passed".format(run_dir / "result.txt")
@@ -184,6 +205,16 @@ def main(argv=None):
                     )
                 )
 
+        cpu_terms = parse_terms(results["cpu"])
+        hip_terms = parse_terms(results["hip"])
+        if cpu_terms != hip_terms:
+            raise CompareError(
+                "energy term lists differ: CPU={} HIP={}".format(
+                    ",".join(cpu_terms), ",".join(hip_terms)
+                )
+            )
+        terms = cpu_terms
+
         cpu_hashes = read_input_hashes(args.cpu_run)
         hip_hashes = read_input_hashes(args.hip_run)
         if cpu_hashes != hip_hashes:
@@ -193,8 +224,12 @@ def main(argv=None):
                 )
             )
 
-        cpu_times, cpu_columns = parse_energy(args.cpu_run / "energy.xvg")
-        hip_times, hip_columns = parse_energy(args.hip_run / "energy.xvg")
+        cpu_times, cpu_columns = parse_energy(
+            args.cpu_run / "energy.xvg", terms
+        )
+        hip_times, hip_columns = parse_energy(
+            args.hip_run / "energy.xvg", terms
+        )
         if len(cpu_times) != len(hip_times):
             raise CompareError(
                 "frame counts differ: CPU={} HIP={}".format(
@@ -217,14 +252,15 @@ def main(argv=None):
                 ", ".join(sorted(cpu_hashes))
             ),
             "frames: {}".format(len(cpu_times)),
+            "energy terms: {}".format(", ".join(terms)),
             "",
-            "{:<14} {:>12} {:>12} {:>14}  {}".format(
+            "{:<20} {:>12} {:>12} {:>14}  {}".format(
                 "term", "max_abs", "max_rel", "worst_margin", "status"
             ),
         ]
 
         failed = False
-        for term in TERMS:
+        for term in terms:
             atol = args.temperature_atol if term == "Temperature" else args.energy_atol
             max_abs, max_rel, worst_margin = compare_term(
                 cpu_columns[term], hip_columns[term], atol, args.rtol
@@ -232,7 +268,7 @@ def main(argv=None):
             passed = worst_margin <= 0.0
             failed = failed or not passed
             lines.append(
-                "{:<14} {:>12} {:>12} {:>14}  {}".format(
+                "{:<20} {:>12} {:>12} {:>14}  {}".format(
                     term,
                     format_delta(max_abs),
                     format_delta(max_rel),
@@ -245,16 +281,16 @@ def main(argv=None):
             [
                 "",
                 "tolerance: |CPU-HIP| <= atol + rtol * max(|CPU|, |HIP|)",
-                "atol: Potential/Kinetic={} kJ/mol, Temperature={} K, rtol={}".format(
+                "atol: energy terms={} kJ/mol, Temperature={} K, rtol={}".format(
                     args.energy_atol, args.temperature_atol, args.rtol
                 ),
                 "final CPU: " + ", ".join(
                     "{}={:.6g}".format(term, cpu_columns[term][-1])
-                    for term in TERMS
+                    for term in terms
                 ),
                 "final HIP: " + ", ".join(
                     "{}={:.6g}".format(term, hip_columns[term][-1])
-                    for term in TERMS
+                    for term in terms
                 ),
                 "comparison={}".format("failed" if failed else "passed"),
             ]

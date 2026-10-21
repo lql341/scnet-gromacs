@@ -19,12 +19,14 @@ test -s "$root/cases/argon8/md.mdp"
 test -s "$root/cases/ionpair_pme/ionpair.gro"
 test -s "$root/cases/ionpair_pme/topol.top"
 test -s "$root/cases/ionpair_pme/md.mdp"
+test -s "$root/benchmarks/catalog.json"
+python3 -m json.tool "$root/benchmarks/catalog.json" >/dev/null
 if grep -RInE '/public/home/|/home/[A-Za-z0-9_.-]+/' \
     "$root"/README* "$root"/references \
     "$root"/scripts/gromacs_*.sh "$root"/scripts/gromacs_*.sbatch \
     "$root"/scripts/compare_gromacs_energy.py \
     "$root"/contrib \
-    "$root"/clusters "$root"/cases; then
+    "$root"/clusters "$root"/cases "$root"/benchmarks; then
     echo "private absolute path found" >&2
     exit 1
 fi

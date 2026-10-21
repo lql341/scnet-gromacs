@@ -29,11 +29,16 @@ CASES = {
         "gro": "argon.gro",
         "deffnm": "argon",
         "pme": False,
+        "energy_terms": "Potential,Kinetic-En.,Temperature,LJ-(SR)",
     },
     "ionpair_pme": {
         "gro": "ionpair.gro",
         "deffnm": "ionpair",
         "pme": True,
+        "energy_terms": (
+            "Potential,Kinetic-En.,Temperature,"
+            "Coulomb-(SR),Coul.-recip.,LJ-(SR)"
+        ),
     },
 }
 
@@ -195,33 +200,44 @@ def upload_tree(scnet, local_scripts, local_case, remote_scripts, remote_case):
             scnet.run("upload", str(source), str(remote_case))
 
 
-def build_command(
-    case,
-    mode,
-    run_root,
-    remote_scripts,
-    remote_case,
-    module,
-    gpu_arch,
-    expect_version,
-):
+def build_command(case, mode, run_root, remote_scripts, remote_case, settings):
+    case_info = CASES[case]
     env = {
         "GROMACS_RUN_ROOT": str(run_root / "results-{}".format(case)),
-        "GROMACS_MODULE": module,
+        "GROMACS_MODULE": settings["module"],
         "GROMACS_BINARY": "gmx_mpi",
         "GROMACS_GPU_MODE": mode,
+        "GROMACS_ENERGY_TERMS": case_info["energy_terms"],
+        "GROMACS_MPI_RANKS": str(settings["ranks"]),
+        "GROMACS_OMP_THREADS": str(settings["omp_threads"]),
+        "GROMACS_MPI_LAUNCHER": settings["launcher"],
     }
-    if expect_version:
-        env["GROMACS_EXPECT_VERSION"] = expect_version
-    case_info = CASES[case]
-    if mode == "hip" and gpu_arch:
-        env["GROMACS_EXPECT_GPU_ARCH"] = gpu_arch
+    if settings["expect_version"]:
+        env["GROMACS_EXPECT_VERSION"] = settings["expect_version"]
+    if settings["module_path"]:
+        env["GROMACS_MODULEPATH"] = settings["module_path"]
+    if mode == "hip":
+        if settings["gpu_arch"]:
+            env["GROMACS_EXPECT_GPU_ARCH"] = settings["gpu_arch"]
+        env["GROMACS_EXPECT_GPU_COUNT"] = str(settings["dcus"])
+    for key, value in settings["mpi_env"].items():
+        env[key] = value
+    if settings["force_gpu_aware"]:
+        env["GROMACS_FORCE_GPU_AWARE_MPI"] = "1"
+    if settings["require_gpu_aware"]:
+        env["GROMACS_REQUIRE_GPU_AWARE_MPI"] = "1"
     if case_info["pme"]:
         env["GROMACS_CASE_ROOT"] = str(remote_case)
         env["GROMACS_CASE_GRO"] = case_info["gro"]
         env["GROMACS_DEFFNM"] = case_info["deffnm"]
         if mode == "hip":
             env["GROMACS_GPU_PME"] = "1"
+        if settings["ranks"] > 1:
+            env["GROMACS_NPME"] = settings["npme"] or "1"
+        elif settings["npme"]:
+            env["GROMACS_NPME"] = settings["npme"]
+    elif settings["npme"]:
+        env["GROMACS_NPME"] = settings["npme"]
     lines = [
         "export {}={}".format(key, shlex.quote(value))
         for key, value in env.items()
@@ -234,30 +250,9 @@ def build_command(
     return "\n".join(lines)
 
 
-def submit_mode(
-    scnet,
-    case,
-    mode,
-    run_root,
-    remote_scripts,
-    remote_case,
-    queue,
-    module,
-    gpu_arch,
-    expect_version,
-    cpus,
-    dcus,
-    walltime,
-):
+def submit_mode(scnet, case, mode, run_root, remote_scripts, remote_case, settings):
     command = build_command(
-        case,
-        mode,
-        run_root,
-        remote_scripts,
-        remote_case,
-        module,
-        gpu_arch,
-        expect_version,
+        case, mode, run_root, remote_scripts, remote_case, settings
     )
     args = [
         "submit",
@@ -268,16 +263,16 @@ def submit_mode(
         "--work-dir",
         str(run_root),
         "--queue",
-        queue,
+        settings["queue"],
         "--nodes",
         "1",
         "--cpus",
-        str(cpus),
+        str(settings["cpus"]),
         "--walltime",
-        walltime,
+        settings["walltime"],
     ]
     if mode == "hip":
-        args.extend(["--dcus", str(dcus)])
+        args.extend(["--dcus", str(settings["dcus"])])
     data = scnet.run(*args)
     try:
         return int(data["job_id"])
@@ -307,46 +302,97 @@ def wait_job(scnet, job_id, timeout, interval):
     )
 
 
-def confirm_job(scnet, job_id, timeout, interval):
-    state = wait_job(scnet, job_id, timeout, interval)
-    if state != "COMPLETED":
+def parse_walltime(value):
+    days = 0
+    text = str(value)
+    if "-" in text:
+        day_text, text = text.split("-", 1)
+        days = int(day_text)
+    parts = text.split(":")
+    if len(parts) == 2:
+        hours, minutes, seconds = int(parts[0]), int(parts[1]), 0
+    elif len(parts) == 3:
+        hours, minutes, seconds = int(parts[0]), int(parts[1]), int(parts[2])
+    else:
+        raise RunnerError("walltime must use HH:MM:SS or D-HH:MM:SS")
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds
+
+
+def preflight_queue(scnet, queue, walltime):
+    data = scnet.run("queues")
+    if not isinstance(data, list):
+        raise RunnerError("queue preflight returned no queue list")
+    match = next(
+        (item for item in data if item.get("partition") == queue), None
+    )
+    if match is None:
+        raise RunnerError("queue {!r} is not visible to this account".format(queue))
+    max_walltime = int(match.get("max_walltime") or 0)
+    requested = parse_walltime(walltime)
+    if max_walltime and requested > max_walltime:
         raise RunnerError(
-            "job {} reached state {!r}, not COMPLETED".format(job_id, state)
-        )
-    details = scnet.run("--details", "job", str(job_id))
-    exit_status = (details or {}).get("platform_exit_status")
-    if exit_status != 0:
-        raise RunnerError(
-            "job {} completed with platform_exit_status={!r}".format(
-                job_id, exit_status
+            "requested walltime {} exceeds queue limit {} seconds".format(
+                walltime, max_walltime
             )
         )
+    print(
+        "preflight queue={} free_nodes={} max_walltime={}".format(
+            queue, match.get("free_nodes", "?"), max_walltime
+        ),
+        file=sys.stderr,
+    )
 
 
-def download_and_check(scnet, remote_run, local_run, mode, artifacts):
+def download_artifacts(scnet, remote_run, local_run, artifacts, optional):
     names = remote_children(scnet, remote_run)
-    missing = [name for name in artifacts if name not in names]
-    if missing:
-        raise RunnerError(
-            "remote run {} is missing artifacts: {}".format(
-                remote_run, ", ".join(missing)
-            )
-        )
-    local_run.mkdir(parents=True, exist_ok=False)
-    for name in artifacts:
-        scnet.run("download", str(remote_run / name), str(local_run / name))
-    for name in OPTIONAL_ARTIFACTS:
-        if name in names:
-            scnet.run("download", str(remote_run / name), str(local_run / name))
+    local_run.mkdir(parents=True, exist_ok=True)
+    for name in artifacts + optional:
+        if name not in names:
+            continue
+        destination = local_run / name
+        if destination.exists():
+            continue
+        scnet.run("download", str(remote_run / name), str(destination))
+    return [name for name in artifacts if name not in names]
 
+
+def download_scheduler_logs(scnet, run_root, job_id, local_run):
+    names = remote_children(scnet, run_root)
+    target = local_run / "scheduler"
+    target.mkdir(parents=True, exist_ok=True)
+    stdout = "std.out.{}".format(job_id)
+    stderr = "std.err.{}".format(job_id)
+    for name in names:
+        is_job_log = (
+            name.startswith("job_")
+            and name.endswith(".log")
+            and str(job_id) in name
+        )
+        if name not in (stdout, stderr) and not is_job_log:
+            continue
+        destination = target / name
+        if not destination.exists():
+            scnet.run("download", str(run_root / name), str(destination))
+
+
+def read_result(local_run):
     result = {}
-    for line in (local_run / "result.txt").read_text().splitlines():
+    path = local_run / "result.txt"
+    if not path.is_file():
+        return result
+    for line in path.read_text().splitlines():
         key, sep, value = line.partition("=")
         if sep:
             result[key.strip()] = value.strip()
+    return result
+
+
+def check_result(local_run, result, mode):
     if result.get("status") != "passed":
         raise RunnerError(
-            "{} did not report status=passed".format(local_run / "result.txt")
+            "{} reports status={!r}".format(
+                local_run / "result.txt", result.get("status")
+            )
         )
     if result.get("mode") != mode:
         raise RunnerError(
@@ -354,7 +400,6 @@ def download_and_check(scnet, remote_run, local_run, mode, artifacts):
                 local_run / "result.txt", result.get("mode"), mode
             )
         )
-    return local_run
 
 
 def compare_runs(local_scripts, cpu_run, hip_run, report):
@@ -403,10 +448,17 @@ def main(argv=None):
     parser.add_argument("--hip-module")
     parser.add_argument("--cpus", type=int)
     parser.add_argument("--dcus", type=int)
+    parser.add_argument("--mpi-ranks", type=int)
+    parser.add_argument("--omp-threads", type=int)
+    parser.add_argument("--mpi-launcher")
+    parser.add_argument("--npme")
+    parser.add_argument("--force-gpu-aware", action="store_true")
+    parser.add_argument("--require-gpu-aware", action="store_true")
     parser.add_argument("--walltime")
     parser.add_argument("--download-dir", type=Path)
     parser.add_argument("--wait-timeout", type=int, default=600)
     parser.add_argument("--interval", type=int, default=15)
+    parser.add_argument("--skip-preflight", action="store_true")
     args = parser.parse_args(argv)
 
     try:
@@ -433,14 +485,57 @@ def main(argv=None):
         hip_module = args.hip_module or profile.get("GROMACS_GPU_MODULE")
         gpu_arch = profile.get("GPU_ARCH")
         expect_version = profile.get("GROMACS_EXPECT_VERSION")
+        module_path = profile.get("GROMACS_MODULEPATH", "")
         try:
-            cpus = args.cpus or int(profile.get("CPUS_PER_JOB", "2"))
+            ranks = args.mpi_ranks or int(profile.get("MPI_RANKS", "1"))
+            omp_threads = args.omp_threads or int(
+                profile.get("OMP_THREADS", "2")
+            )
+            cpus = args.cpus or int(
+                profile.get(
+                    "CPUS_PER_JOB", str(ranks * omp_threads)
+                )
+            )
             dcus = args.dcus or int(profile.get("DCUS_PER_JOB", "1"))
         except ValueError as exc:
-            raise RunnerError("profile CPU/DCU values must be integers") from exc
+            raise RunnerError("profile CPU/DCU/MPI values must be integers") from exc
         walltime = args.walltime or profile.get("WALLTIME", "00:15:00")
+        launcher = args.mpi_launcher or profile.get("MPI_LAUNCHER", "srun")
+        npme = args.npme or profile.get("NPME", "")
+        mpi_env = {}
+        for key, value in profile.items():
+            if not key.startswith("MPI_ENV_"):
+                continue
+            name = key[len("MPI_ENV_") :]
+            if not name or not name.replace("_", "a").isalnum():
+                raise RunnerError("invalid MPI_ENV_ key: {}".format(key))
+            mpi_env[name] = value
+        force_gpu_aware = args.force_gpu_aware or profile.get(
+            "FORCE_GPU_AWARE_MPI", "0"
+        ).lower() in ("1", "true", "yes")
+        require_gpu_aware = args.require_gpu_aware or profile.get(
+            "REQUIRE_GPU_AWARE_MPI", "0"
+        ).lower() in ("1", "true", "yes")
+
+        if ranks < 1 or omp_threads < 1:
+            raise RunnerError("MPI ranks and OpenMP threads must be positive")
+        if cpus < ranks * omp_threads:
+            raise RunnerError(
+                "CPU request {} is smaller than ranks*threads={}*{}".format(
+                    cpus, ranks, omp_threads
+                )
+            )
+        if npme and ranks <= 1:
+            raise RunnerError("--npme requires --mpi-ranks greater than one")
+        if force_gpu_aware:
+            require_gpu_aware = True
 
         modes = ("cpu", "hip") if args.mode == "both" else (args.mode,)
+        if "hip" in modes and dcus != ranks:
+            raise RunnerError(
+                "HIP validation requires one DCU per MPI rank "
+                "(ranks={}, dcus={})".format(ranks, dcus)
+            )
         if "cpu" in modes and (not cpu_queue or not cpu_module):
             raise RunnerError(
                 "CPU mode needs --cpu-queue and --cpu-module or a profile"
@@ -467,6 +562,15 @@ def main(argv=None):
                 )
             )
 
+        if not args.skip_preflight:
+            preflight_queues = set()
+            if "cpu" in modes:
+                preflight_queues.add(cpu_queue)
+            if "hip" in modes:
+                preflight_queues.add(hip_queue)
+            for queue in sorted(preflight_queues):
+                preflight_queue(scnet, queue, walltime)
+
         ensure_unique_run_root(scnet, run_root)
 
         remote_repo = run_root / "repo"
@@ -482,8 +586,23 @@ def main(argv=None):
         jobs = []
         try:
             for mode in modes:
-                queue = cpu_queue if mode == "cpu" else hip_queue
-                module = cpu_module if mode == "cpu" else hip_module
+                settings = {
+                    "queue": cpu_queue if mode == "cpu" else hip_queue,
+                    "module": cpu_module if mode == "cpu" else hip_module,
+                    "gpu_arch": gpu_arch,
+                    "expect_version": expect_version,
+                    "module_path": module_path,
+                    "ranks": ranks,
+                    "omp_threads": omp_threads,
+                    "launcher": launcher,
+                    "npme": npme,
+                    "mpi_env": mpi_env,
+                    "force_gpu_aware": force_gpu_aware,
+                    "require_gpu_aware": require_gpu_aware,
+                    "cpus": cpus,
+                    "dcus": dcus,
+                    "walltime": walltime,
+                }
                 job_id = submit_mode(
                     scnet,
                     args.case,
@@ -491,13 +610,7 @@ def main(argv=None):
                     run_root,
                     remote_scripts,
                     remote_case,
-                    queue,
-                    module,
-                    gpu_arch,
-                    expect_version,
-                    cpus,
-                    dcus,
-                    walltime,
+                    settings,
                 )
                 jobs.append((mode, job_id))
                 print(
@@ -516,28 +629,56 @@ def main(argv=None):
 
         errors = []
         local_runs = {}
+        artifacts = REQUIRED_ARTIFACTS + (
+            "energy.log",
+            "{}.log".format(CASES[args.case]["deffnm"]),
+        )
         for mode, job_id in jobs:
+            remote_run = (
+                run_root
+                / "results-{}".format(args.case)
+                / "argon-{}-{}".format(mode, job_id)
+            )
+            local_run = download_dir / "{}-{}-{}".format(
+                args.case, mode, job_id
+            )
             try:
-                confirm_job(scnet, job_id, args.wait_timeout, args.interval)
-                remote_run = (
-                    run_root
-                    / "results-{}".format(args.case)
-                    / "argon-{}-{}".format(mode, job_id)
-                )
-                local_run = download_dir / "{}-{}-{}".format(
-                    args.case, mode, job_id
-                )
-                local_runs[mode] = download_and_check(
+                state = wait_job(scnet, job_id, args.wait_timeout, args.interval)
+                details = scnet.run("--details", "job", str(job_id))
+                exit_status = (details or {}).get("platform_exit_status")
+                missing = download_artifacts(
                     scnet,
                     remote_run,
                     local_run,
-                    mode,
-                    REQUIRED_ARTIFACTS,
+                    artifacts,
+                    OPTIONAL_ARTIFACTS,
                 )
+                download_scheduler_logs(
+                    scnet, run_root, job_id, local_run
+                )
+                if state != "COMPLETED":
+                    raise RunnerError(
+                        "state={!r}, platform_exit_status={!r}".format(
+                            state, exit_status
+                        )
+                    )
+                if exit_status != 0:
+                    raise RunnerError(
+                        "platform_exit_status={!r}".format(exit_status)
+                    )
+                if missing:
+                    raise RunnerError(
+                        "missing artifacts: {}".format(", ".join(missing))
+                    )
+                result = read_result(local_run)
+                check_result(local_run, result, mode)
+                local_runs[mode] = local_run
             except RunnerError as exc:
                 errors.append("{} job {}: {}".format(mode, job_id, exc))
                 print(
-                    "{} job {} needs attention: {}".format(mode, job_id, exc),
+                    "{} job {} needs attention: {}; artifacts={}".format(
+                        mode, job_id, exc, local_run
+                    ),
                     file=sys.stderr,
                 )
 

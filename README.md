@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.4.0
+Current release: 0.5.0
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -30,15 +30,18 @@ rebuilding the software. See the [official 2026.4 release notes](https://manual.
 - finite energy output, a compact final-state checksum and recorded input
   checksums;
 - an explicit CPU/HIP energy comparison with documented tolerances;
+- PME energy components (`Coulomb (SR)`, `Coul. recip.`, `LJ (SR)`), not just
+  the total potential;
+- optional multi-rank, PME decomposition, multi-GPU and PMPI execution paths;
 - scheduler completion and workload exit status.
 
 The CPU run is the oracle. A GPU run is an integration and runtime check, not a
 claim of bitwise equivalence or production performance. Floating-point
 differences must be reported with tolerances and physical sanity checks.
 
-The bundled cases are only smoke tests. They do not establish multi-node
-scaling, PME decomposition behavior, GPU-aware MPI, PMPI variants or
-production-size accuracy.
+The bundled cases are only smoke tests. They exercise selected PME
+decomposition, GPU-aware and PMPI paths, but do not establish multi-node
+scaling or production-size accuracy.
 
 ## Workflow
 
@@ -54,12 +57,20 @@ The scripts accept:
 
 ```text
 GROMACS_MODULE     module name, default gromacs/2026.3
+GROMACS_MODULEPATH optional private modulefile directory for a candidate build
 GROMACS_BINARY     binary name, default gmx_mpi
 GROMACS_GPU_MODE   cpu or hip, default cpu
 GROMACS_GPU_PME    1 to add -pme gpu, default 0; only for a PME-enabled case
 GROMACS_EXPECT_GPU_ARCH  optional expected gfx name, e.g. gfx906
 GROMACS_EXPECT_VERSION   optional expected GROMACS version, e.g. 2026.3
-GROMACS_NPME       optional -npme value; only for a real multi-rank job
+GROMACS_ENERGY_TERMS     comma-separated gmx energy input terms
+GROMACS_MPI_RANKS        MPI ranks, default 1
+GROMACS_OMP_THREADS      OpenMP threads per rank, default 2
+GROMACS_MPI_LAUNCHER     srun or mpirun, default srun
+GROMACS_NPME             -npme value; only valid when MPI ranks > 1
+GROMACS_EXPECT_GPU_COUNT expected selected GPU count in HIP mode
+GROMACS_FORCE_GPU_AWARE_MPI set GMX_FORCE_GPU_AWARE_MPI=1
+GROMACS_REQUIRE_GPU_AWARE_MPI fail if the log says GPU-aware MPI is absent
 GROMACS_CASE_ROOT  case directory, default <repo>/cases/argon8
 GROMACS_CASE_GRO   input coordinate file, default argon.gro
 GROMACS_DEFFNM     output prefix, default argon
@@ -73,7 +84,22 @@ set `GROMACS_CASE_ROOT` to `cases/ionpair_pme`, `GROMACS_CASE_GRO=ionpair.gro`,
 
 On a single MPI rank, use `-pme gpu` without `-npme`. The installed GROMACS
 rejects `-npme` when only one rank is requested; set `GROMACS_NPME` only when
-the job really has multiple ranks.
+the job really has multiple MPI ranks.
+
+For multi-rank work, set `GROMACS_MPI_RANKS`, `GROMACS_OMP_THREADS` and a
+launcher. The allocation must provide at least `ranks * threads` CPUs. HIP
+validation currently requires one requested DCU per rank. Use `GROMACS_NPME=1`
+with a PME case to request a separate PME rank.
+
+Observed launcher behavior on Kunshan:
+
+- the self-built OpenMPI 5 module connected ranks with `mpirun`; `srun`
+  launched singleton ranks in this environment;
+- the PMPI module's platform OpenMPI 4.1.5 is not Slurm-PMI enabled. Its
+  multi-rank path needed `mpirun` plus an MPI transport override, for example
+  `MPI_ENV_OMPI_MCA_PML=ob1` in the profile, to avoid a UCX/InfiniBand abort.
+
+These are site observations, not universal launcher recommendations.
 
 ## Optional OpenAPI runner
 
@@ -112,6 +138,11 @@ The optional `GPU_ARCH` profile field is passed to the compute-node device check
 for Z100 set `GPU_ARCH="gfx906"`. `GROMACS_EXPECT_VERSION` pins the module
 version for a reproducible run; update it when the site module changes.
 
+The optional runner performs a read-only queue/walltime preflight and, on
+failure, best-effort downloads application artifacts plus scheduler
+stdout/stderr into the local download directory. Those logs stay outside the
+repository and are for diagnosis only.
+
 OpenAPI credentials are configured only through `scnet-hpc`; never put AK/SK,
 private keys or site paths in this repository. If OpenAPI cannot expose a fact,
 use SSH only for bounded diagnosis.
@@ -134,8 +165,9 @@ python3 scripts/compare_gromacs_energy.py CPU_RUN_DIR HIP_RUN_DIR \
 ```
 
 The checker requires `status=passed` in both runs, identical input checksums,
-the same time grid and finite `Potential`, `Kinetic En.` and `Temperature`
-columns. It applies, per data point:
+the same time grid and the finite energy columns recorded by the smoke job.
+PME runs include `Coulomb (SR)`, `Coul. recip.` and `LJ (SR)` in addition to
+`Potential`, `Kinetic En.` and `Temperature`. It applies, per data point:
 
 ```text
 |CPU - HIP| <= atol + rtol * max(|CPU|, |HIP|)
@@ -146,19 +178,42 @@ and `rtol=1e-3`. These defaults are a smoke-level contract, not a production
 accuracy specification. A pass is evidence of numerical consistency for this
 tiny case, not a claim that CPU and GPU trajectories are bitwise identical.
 
+## Multi-rank, multi-GPU and performance
+
+The micro-cases exercise multi-rank and multi-GPU execution, not performance.
+The optional runner supports `--mpi-ranks`, `--omp-threads`, `--mpi-launcher`,
+`--npme` and `--force-gpu-aware`. The smoke script verifies the MPI process
+count, PME rank decomposition when requested, selected GPU count and optional
+forced GPU-aware MPI.
+
+Performance characterization is separate. `benchmarks/catalog.json` is a
+public catalog of benchmark classes and measurement fields; it is deliberately
+not loaded as skill context and contains no committed performance values. Use a
+representative system for scaling claims. If multi-GPU scaling is poor, report
+the measured reason (system size, communication, PME decomposition, GPU-aware
+MPI, load imbalance or I/O) rather than omitting the result.
+
 The checker needs the `inputs.sha256` file written by the current smoke script.
 Runs from older script versions do not contain it.
 
 ## Measured scope on Kunshan
 
 The installed Kunshan module was exercised on gfx906 with GROMACS 2026.3,
-GCC 16.2, OpenMPI 5.0.11, DTK 26.04, HIP 6.3.26113 and rocFFT 1.0.28. Both the
-Argon CPU/HIP smoke and the ion-pair PME CPU/HIP smoke completed with
-`status=passed` and passed the tolerance checker. The PME run selected one GPU
-and reported PME work on the GPU. The OpenAPI-first runner was also exercised
-end to end on both cases, including remote upload, submission, wait, artifact
-download and comparison. These are single-node, single-rank, 20-step smoke
-results; they do not cover performance or larger systems.
+GCC 16.2, OpenMPI 5.0.11, DTK 26.04, HIP 6.3.26113 and rocFFT 1.0.28. Validated
+paths include single-rank CPU/HIP, PME GPU, two-rank CPU PME decomposition,
+two-rank/two-GPU HIP and PME, forced GPU-aware MPI on the micro-case, and PMPI
+single-rank plus multi-rank/multi-GPU with an OB1 transport override.
+
+A private GROMACS 2026.4 candidate build was also exercised through
+`GROMACS_MODULEPATH`: Argon and PME CPU/HIP completed and passed the tolerance
+checker. It is a local validation build, not a site-published module, and it
+required local toolchain compatibility work. Do not treat it as evidence that
+the site module has been upgraded.
+
+All normal runs completed with `status=passed`; comparisons passed. These are
+single-node, short, micro-case results. They do not establish production
+accuracy, multi-node scaling or performance. The PMPI multi-rank path depends on
+site MPI transport configuration.
 
 ## DCU porting lessons retained
 

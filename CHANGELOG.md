@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0 (2026-10-21)
+
+- Extend numerical comparison with PME components and configurable energy
+  terms while keeping the CPU oracle and tolerance contract.
+- Add explicit multi-rank, PME decomposition, multi-GPU, forced GPU-aware MPI
+  and PMPI execution paths with log-based process/GPU/PME-rank evidence.
+- Record the Kunshan launcher findings: `mpirun` for the self-built OpenMPI 5
+  module; PMPI multi-rank needs an MPI transport override such as OB1.
+- Add read-only queue/walltime preflight and best-effort failure artifact plus
+  scheduler-log collection; downloaded logs stay outside the repository.
+- Add a non-loaded performance benchmark catalog under `benchmarks/`.
+- Validate energy coverage, multi-rank CPU/HIP, multi-GPU PME and PMPI paths on
+  the target cluster.
+- Add `GROMACS_MODULEPATH` for private candidate builds and verify the version
+  adaptation path with a private GROMACS 2026.4 build.
+
 ## 0.4.0 (2026-10-21)
 
 - Make OpenAPI orchestration optional under `contrib/`; the compute-node

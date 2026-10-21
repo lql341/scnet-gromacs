@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.4.0
+当前版本：0.5.0
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -26,13 +26,15 @@ case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检
   不给 Argon case 强行添加 PME 参数；
 - 有限能量输出、紧凑的最终状态 checksum 和输入 checksum；
 - 明确的 CPU/HIP 能量容差比较；
+- PME 能量分量（`Coulomb (SR)`、`Coul. recip.`、`LJ (SR)`），不只比较总势能；
+- 可选多 rank、PME 分解、多 GPU 和 PMPI 执行路径；
 - 调度器终态和 workload 退出码。
 
 CPU 运行是数值 oracle。GPU 运行只证明集成和运行时，不宣称逐位相同或生产性能。
 浮点差异必须结合容差和物理合理性报告。
 
-bundled case 只是 smoke test，不能证明多节点扩展、PME 分解、GPU-aware MPI、
-PMPI 变体或生产规模精度。
+bundled case 只是 smoke test。它们覆盖部分 PME 分解、GPU-aware MPI 和 PMPI
+路径，但不能证明多节点扩展或生产规模精度。
 
 ## 工作流
 
@@ -47,12 +49,20 @@ bash scripts/validate.sh
 
 ```text
 GROMACS_MODULE     module 名称，默认 gromacs/2026.3
+GROMACS_MODULEPATH 可选的私有 modulefile 目录，用于候选构建
 GROMACS_BINARY     可执行文件，默认 gmx_mpi
 GROMACS_GPU_MODE   cpu 或 hip，默认 cpu
 GROMACS_GPU_PME    设为 1 时增加 -pme gpu，默认 0；仅用于 PME case
 GROMACS_EXPECT_GPU_ARCH  可选的期望 gfx 名称，例如 gfx906
 GROMACS_EXPECT_VERSION   可选的期望 GROMACS 版本，例如 2026.3
-GROMACS_NPME       可选 -npme 值；仅用于真正的多 rank 作业
+GROMACS_ENERGY_TERMS     逗号分隔的 gmx energy 输入项
+GROMACS_MPI_RANKS        MPI rank 数，默认 1
+GROMACS_OMP_THREADS      每个 rank 的 OpenMP 线程数，默认 2
+GROMACS_MPI_LAUNCHER     srun 或 mpirun，默认 srun
+GROMACS_NPME             -npme 值；仅当 MPI rank > 1 时有效
+GROMACS_EXPECT_GPU_COUNT HIP 模式期望选中的 GPU 数
+GROMACS_FORCE_GPU_AWARE_MPI 设置 GMX_FORCE_GPU_AWARE_MPI=1
+GROMACS_REQUIRE_GPU_AWARE_MPI 日志显示不支持 GPU-aware MPI 时失败
 GROMACS_CASE_ROOT  case 目录，默认 <repo>/cases/argon8
 GROMACS_CASE_GRO   输入坐标文件，默认 argon.gro
 GROMACS_DEFFNM     输出前缀，默认 argon
@@ -66,6 +76,20 @@ GROMACS_RUN_ROOT   唯一可写运行目录
 
 单 MPI rank 使用 `-pme gpu` 时不要加 `-npme`。已安装的 GROMACS 在只请求
 一个 rank 时会拒绝 `-npme`；只有真正的多 rank 作业才设置 `GROMACS_NPME`。
+
+多 rank 时设置 `GROMACS_MPI_RANKS`、`GROMACS_OMP_THREADS` 和 launcher；
+资源必须至少提供 `ranks * threads` 个 CPU。HIP 验证当前要求每个 rank 一个
+DCU。PME case 设置 `GROMACS_NPME=1` 可请求独立 PME rank。
+
+昆山实测 launcher 行为：
+
+- 自建 OpenMPI 5 module 用 `mpirun` 能正确连接 rank；`srun` 在该环境启动了
+  彼此独立的 singleton rank；
+- PMPI module 的平台 OpenMPI 4.1.5 没有 Slurm PMI 支持。多 rank 需要
+  `mpirun` 加 MPI transport 覆盖，例如 profile 中
+  `MPI_ENV_OMPI_MCA_PML=ob1`，以避开 UCX/InfiniBand abort。
+
+这些是站点观察，不是通用 launcher 结论。
 
 ## 可选的 OpenAPI runner
 
@@ -99,6 +123,9 @@ walltime。模板面向 Z100/DCU，但只是提示，不是实时可用性证据
 Z100 设置为 `GPU_ARCH="gfx906"`。`GROMACS_EXPECT_VERSION` 用于固定 module
 版本，站点升级 GROMACS 时同步更新。
 
+可选 runner 会先做只读队列/walltime preflight；失败时 best-effort 下载应用
+artifact 和调度器 stdout/stderr 到本地下载目录。这些日志留在仓库外，只用于诊断。
+
 OpenAPI 凭证只通过 `scnet-hpc` 配置；不要在仓库中写入 AK/SK、私钥或站点路径。
 如果 OpenAPI 无法提供某个事实，SSH 只用于有限的诊断。
 
@@ -118,7 +145,8 @@ python3 scripts/compare_gromacs_energy.py CPU_RUN_DIR HIP_RUN_DIR \
 ```
 
 检查器要求两个 run 都有 `status=passed`、输入 checksum 相同、时间网格相同，并且
-`Potential`、`Kinetic En.`、`Temperature` 都是有限数值。逐数据点应用：
+smoke 记录的能量列都是有限数值。PME 运行还比较 `Coulomb (SR)`、
+`Coul. recip.`、`LJ (SR)`。逐数据点应用：
 
 ```text
 |CPU - HIP| <= atol + rtol * max(|CPU|, |HIP|)
@@ -128,16 +156,35 @@ python3 scripts/compare_gromacs_energy.py CPU_RUN_DIR HIP_RUN_DIR \
 是 smoke 级契约，不是生产精度规范。通过只说明这个小 case 的数值一致性，不
 宣称 CPU/GPU 轨迹逐位相同。
 
+## 多 rank、多 GPU 与性能
+
+微 case 只验证多 rank/多 GPU 的执行路径，不代表性能。可选 runner 支持
+`--mpi-ranks`、`--omp-threads`、`--mpi-launcher`、`--npme` 和
+`--force-gpu-aware`。smoke 脚本会检查 MPI 进程数、请求时的 PME rank 分解、
+选中的 GPU 数，以及可选的强制 GPU-aware MPI。
+
+性能表征是独立工作。`benchmarks/catalog.json` 只提供公开 benchmark 类别和
+测量字段，不作为 skill 上下文加载，也不提交性能数值。扩展性结论必须使用
+代表性体系；如果多 GPU 扩展不好，要报告实测原因（体系规模、通信、PME 分解、
+GPU-aware MPI、负载不均或 I/O），不能省略。
+
 检查器依赖当前 smoke 脚本写出的 `inputs.sha256`；旧版脚本的历史 run 没有该文件。
 
 ## 昆山实测范围
 
 已安装的昆山 module 在 gfx906 上实测：GROMACS 2026.3、GCC 16.2、
-OpenMPI 5.0.11、DTK 26.04、HIP 6.3.26113、rocFFT 1.0.28。Argon CPU/HIP
-smoke 和离子对 PME CPU/HIP smoke 都以 `status=passed` 完成，并通过容差检查。
-PME 运行选择 1 个 GPU，并报告 PME 在 GPU 上执行。OpenAPI 优先 runner 也在两个
-case 上完成端到端实测，包括远端上传、提交、等待、artifact 下载和比较。这些均为
-单节点、单 rank、20 步 smoke 结果，不覆盖性能或更大体系。
+OpenMPI 5.0.11、DTK 26.04、HIP 6.3.26113、rocFFT 1.0.28。已验证路径包括
+单 rank CPU/HIP、PME GPU、双 rank CPU PME 分解、双 rank/双 GPU HIP 和 PME、
+微 case 强制 GPU-aware MPI，以及 PMPI 单 rank 和带 OB1 transport 覆盖的
+多 rank/多 GPU。
+
+还通过 `GROMACS_MODULEPATH` 验证了一个私有的 GROMACS 2026.4 候选构建：
+Argon 和 PME CPU/HIP 都完成并通过容差检查。它是本地验证构建，不是站点发布
+module，并且需要本地工具链兼容处理；不能据此认为站点 module 已升级。
+
+正常作业都以 `status=passed` 完成，比较通过。这些是单节点、短时、微 case
+结果，不代表生产精度、多节点扩展或性能。PMPI 多 rank 依赖站点 MPI transport
+配置。
 
 ## 提炼的 DCU 移植经验
 

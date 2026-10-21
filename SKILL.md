@@ -27,6 +27,9 @@ SCNet. Read [references/validation.md](references/validation.md) first.
   multi-rank job.
 - Compare CPU and HIP energies with the documented tolerance script; do not
   require bitwise equality.
+- For multi-rank work, record the MPI process count; for PME decomposition,
+  record the separate PME rank count; for multi-GPU, record the selected GPU
+  count. Do not infer these from the requested resources.
 - Propagate nonzero `grompp`, `mdrun`, checker and scheduler statuses.
 
 ## Execution profiles
@@ -50,9 +53,16 @@ Require:
 3. successful `grompp` and CPU `mdrun`;
 4. finite energy output and a final-state summary;
 5. for HIP mode, visible device evidence and explicit GPU-offload options;
-6. for PME mode, the log line `PME tasks will do all aspects on the GPU`.
+6. for PME mode, the log line `PME tasks will do all aspects on the GPU`;
+7. for multi-rank, the requested MPI process count and, when requested, the
+   separate PME rank count;
+8. for multi-GPU, the requested selected GPU count.
 
 GPU/CPU equality is not a default bitwise requirement. Compare physical sanity,
 finite values, energy trends and the documented tolerance with
 `scripts/compare_gromacs_energy.py`. The comparison only accepts two runs with
 `status=passed`, identical input checksums and the same time grid.
+
+Performance data is separate: `benchmarks/catalog.json` is not loaded as skill
+context and contains no committed measurements. Use it only for a deliberate
+performance task with a representative system.

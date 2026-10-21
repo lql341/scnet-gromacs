@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "kind": "gromacs-benchmark-catalog",
+  "source": "https://manual.gromacs.org/current/user-guide/mdrun-performance.html",
+  "note": "Catalog only. No performance numbers are committed or loaded as skill context. Confirm the upstream benchmark-suite revision before comparing results.",
+  "cases": [
+    {"id": "benchMEM", "system_class": "membrane", "use": "CPU/GPU scaling"},
+    {"id": "benchPEP", "system_class": "peptide", "use": "single-GPU and multi-GPU"},
+    {"id": "benchPEP-h", "system_class": "peptide", "use": "larger peptide"},
+    {"id": "benchRIB", "system_class": "ribosome", "use": "large-system scaling"},
+    {"id": "benchSTMV", "system_class": "virus", "use": "multi-GPU scaling"},
+    {"id": "benchSTMV-h", "system_class": "virus", "use": "larger virus system"},
+    {"id": "benchCellulose", "system_class": "carbohydrate", "use": "CPU/GPU comparison"},
+    {"id": "benchLipid", "system_class": "lipid", "use": "membrane/lipid scaling"}
+  ],
+  "measurement_schema": {
+    "private": true,
+    "required": [
+      "case_id",
+      "gromacs_version",
+      "target",
+      "nodes",
+      "mpi_ranks",
+      "omp_threads",
+      "gpus",
+      "walltime",
+      "ns_per_day",
+      "command",
+      "scope"
+    ]
+  }
+}

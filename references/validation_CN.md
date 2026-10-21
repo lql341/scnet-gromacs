@@ -22,7 +22,9 @@
   生产规模精度。
 
 CPU 运行是 oracle。记录完整 `gmx_mpi --version`、命令行、资源元组、调度器
-终态、退出码、输入 checksum、能量摘要和最终 checksum。
+终态、退出码、输入 checksum、能量摘要和最终 checksum。smoke 检查器会记录
+选中的能量项，因此 PME 运行除全局量外还比较 `Coulomb (SR)`、
+`Coul. recip.`、`LJ (SR)`。
 
 HIP 模式记录设备可见性、`GMX_GPU`、HIP runtime 和目标架构。可选的
 `GROMACS_EXPECT_GPU_ARCH`（例如 Z100 的 `gfx906`）会在 `rocminfo` 未显示该架构时
@@ -67,7 +69,8 @@ PP/PME 是否真正在设备上执行，仍由目标节点探针和日志决定�
 1. 在计算节点探针，记录 `gmx_mpi --version`、编译器、MPI、HIP/DTK、rocFFT、
    GPU 支持和架构。
 2. 在私有 profile 中设置 `GROMACS_EXPECT_VERSION`。实际加载的二进制版本不一致
-   时，smoke 作业会写出 `status=failed_version` 并以非零状态退出。
+   时，smoke 作业会写出 `status=failed_version` 并以非零状态退出。候选构建可用
+   `GROMACS_MODULEPATH` 指向私有 modulefile 目录，不修改站点 module。
 3. 重跑 Argon CPU 和 HIP。检查完成标记、GPU 选择、有限能量以及调度器/workload
    状态。日志标记变化时，依据实测证据更新检查器，不要猜测。
 4. 重跑 PME case。确认 PME 仍在 GPU 上执行，并确认单 rank 下 `-pme gpu`/
@@ -78,8 +81,43 @@ PP/PME 是否真正在设备上执行，仍由目标节点探针和日志决定�
 6. 更新 profile 的 module、期望版本、CHANGELOG 和实测范围说明。不要静默放宽
    容差，也不要仅凭版本字符串宣称支持。
 
+已通过 `GROMACS_MODULEPATH` 验证一个私有 2026.4 候选构建的 Argon 和 PME
+CPU/HIP。它不是站点 module，不能据此认为站点软件清单已变化。候选构建可能需要
+本地工具链兼容处理；这些工作保持私有，不提交站点路径或构建日志。
+
+在该 DTK 26.04 站点上，2026.4 构建使用 GCC 13.3 作为 HIP host 工具链；
+GCC 16.2 配 DTK Clang 17 HIP 编译器会触发 libstdc++ 头文件不兼容。CMake 4.4.3
+还需要 toolchain file 才能把 `amd_comgr`/HSA 路径传进 HIP try-compile。这些是
+构建环境事实，不是 module 验证结果。
+
 bundled `.gro`、topology 和 `md.mdp` 刻意保持最小。若新版本废弃某个 mdp 选项，
 以 `grompp` 为准；只有记录 before/after 结果后才修改 case。
+
+## 多 rank、多 GPU 与 PMPI
+
+多 rank 执行是显式的：记录 MPI rank 数、每 rank 的 OpenMP 线程、launcher 和
+可选独立 PME rank 数。PME case 在多于一个 rank 时使用 `-npme 1`，详细日志
+必须显示独立 PME rank。HIP 验证要求每个 rank 一个 DCU；日志必须显示期望的
+GPU 数量。这些事实不能从申请的分配资源推断。
+
+昆山实测：
+
+- 自建 OpenMPI 5 module 用 `mpirun` 能连接 rank；该环境下 `srun` 为 GROMACS
+  启动了彼此独立的 singleton rank；
+- PMPI module 的平台 OpenMPI 4.1.5 没有 Slurm PMI 支持。多 rank 需要
+  `mpirun` 加 MPI transport 覆盖，例如 `OMPI_MCA_pml=ob1`，以避开
+  UCX/InfiniBand abort；
+- 双 rank/双 GPU 微 case 强制 GPU-aware MPI 可以完成，但这不能作为规模化
+  GPU-aware 性能或正确性证据。
+
+这些是站点观察。任何多 rank 结果都要记录 launcher、MPI transport 和准确的
+rank/GPU 拓扑。
+
+## 性能参考
+
+`benchmarks/catalog.json` 是公开 benchmark 类别和测量字段的目录，不作为
+skill 上下文加载，也不提交性能数值。性能工作必须使用代表性体系、明确基线，
+并在多 GPU 扩展不佳时说明原因。bundled 微 case 只验证执行和数值一致性。
 
 ## 已实测的 harness 陷阱
 
