@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.5.0
+当前版本：0.5.1
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -164,9 +164,11 @@ smoke 记录的能量列都是有限数值。PME 运行还比较 `Coulomb (SR)`�
 选中的 GPU 数，以及可选的强制 GPU-aware MPI。
 
 性能表征是独立工作。`benchmarks/catalog.json` 只提供公开 benchmark 类别和
-测量字段，不作为 skill 上下文加载，也不提交性能数值。扩展性结论必须使用
-代表性体系；如果多 GPU 扩展不好，要报告实测原因（体系规模、通信、PME 分解、
-GPU-aware MPI、负载不均或 I/O），不能省略。
+测量字段，不作为 skill 上下文加载，也不提交性能数值；`benchmarks/observations.md`
+单独保存短小的本地观察。扩展性结论必须使用代表性体系；如果多 GPU 扩展不好，
+要报告实测原因（体系规模、通信、PME 分解、GPU-aware MPI、负载不均或 I/O），
+不能省略。本站点小体系 2 GPU 比 1 GPU 慢，强制 GPU-aware MPI 更慢；没有实测
+不要启用。
 
 检查器依赖当前 smoke 脚本写出的 `inputs.sha256`；旧版脚本的历史 run 没有该文件。
 

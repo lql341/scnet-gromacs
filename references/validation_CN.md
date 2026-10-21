@@ -108,7 +108,8 @@ GPU 数量。这些事实不能从申请的分配资源推断。
   `mpirun` 加 MPI transport 覆盖，例如 `OMPI_MCA_pml=ob1`，以避开
   UCX/InfiniBand abort；
 - 双 rank/双 GPU 微 case 强制 GPU-aware MPI 可以完成，但这不能作为规模化
-  GPU-aware 性能或正确性证据。
+  GPU-aware 性能或正确性证据。在一次 71,844 原子的短 Lysozyme 运行中，强制
+  GPU-aware MPI 明显慢于默认路径；启用前必须实测。
 
 这些是站点观察。任何多 rank 结果都要记录 launcher、MPI transport 和准确的
 rank/GPU 拓扑。

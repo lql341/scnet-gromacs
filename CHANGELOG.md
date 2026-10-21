@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 (2026-10-21)
+
+- Add a separate local performance-observation note for small-system multi-GPU
+  behavior; it is not loaded as skill context.
+- Record that forcing GPU-aware MPI was slower on the site MPI path and must not
+  be enabled without measurement.
+
 ## 0.5.0 (2026-10-21)
 
 - Extend numerical comparison with PME components and configurable energy

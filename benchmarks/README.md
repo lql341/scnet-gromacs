@@ -7,6 +7,7 @@ correctness gate. Use it only when the task is performance characterization.
 to record. It intentionally contains no committed performance numbers: values
 depend on the site, module build, topology, precision, GPU count and run length.
 Confirm the exact upstream benchmark-suite revision before comparing runs.
+`observations.md` keeps short local observations separate from the catalog.
 
 Record target measurements in a private file outside the repository (for
 example `benchmarks/measurements.local.json`) with these fields:

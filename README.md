@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.5.0
+Current release: 0.5.1
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -188,10 +188,13 @@ forced GPU-aware MPI.
 
 Performance characterization is separate. `benchmarks/catalog.json` is a
 public catalog of benchmark classes and measurement fields; it is deliberately
-not loaded as skill context and contains no committed performance values. Use a
+not loaded as skill context and contains no committed performance values.
+`benchmarks/observations.md` keeps short local results separate. Use a
 representative system for scaling claims. If multi-GPU scaling is poor, report
 the measured reason (system size, communication, PME decomposition, GPU-aware
-MPI, load imbalance or I/O) rather than omitting the result.
+MPI, load imbalance or I/O) rather than omitting the result. On this site, a
+small 2-GPU run was slower than 1 GPU, and forcing GPU-aware MPI was much slower;
+do not enable it without measuring.
 
 The checker needs the `inputs.sha256` file written by the current smoke script.
 Runs from older script versions do not contain it.

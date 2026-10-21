@@ -126,7 +126,9 @@ Observed on Kunshan:
   multi-rank path needed `mpirun` plus an MPI transport override such as
   `OMPI_MCA_pml=ob1` to avoid a UCX/InfiniBand abort;
 - forced GPU-aware MPI completed on the two-rank/two-GPU micro-case, but that is
-  not evidence of GPU-aware performance or correctness at scale.
+  not evidence of GPU-aware performance or correctness at scale. On a short
+  71,844-atom Lysozyme run, forced GPU-aware MPI was much slower than the default
+  path; measure before enabling it.
 
 These are site observations. Record the launcher, MPI transport and exact rank
 topology with any multi-rank result.
