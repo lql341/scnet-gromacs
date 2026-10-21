@@ -24,3 +24,8 @@ compute-node scripts and their evidence contract do not change.
 The wrapper looks for `scnet-hpc` in the sibling `../scnet-hpc` directory first,
 then in `SCNET_HPC_ROOT`, `~/.codex/skills/scnet-hpc` and
 `~/.claude/skills/scnet-hpc`. Pass `--scnet-hpc` to override the lookup.
+
+The profile may select a site module, a private module path, or a user-owned
+binary plus environment script. For multi-node runs it supports `NODES`,
+`MPI_RANKS`, `MPI_RANKS_PER_NODE` and `SCHEDULER_OPTIONS`. Keep MPI transport/HCA
+settings in the profile (`MPI_ENV_*`); they are site-specific.

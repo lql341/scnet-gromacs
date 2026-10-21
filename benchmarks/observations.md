@@ -1,8 +1,9 @@
 # Local performance observations
 
-These are short, site-specific observations, not universal benchmark results and
-not part of the correctness gate. They are kept separate from `catalog.json` and
-are not loaded as skill context.
+These are short, reference-environment observations, not universal benchmark
+results and not part of the correctness gate. A blank SCNet account must
+reproduce them. They are kept separate from `catalog.json` and are not loaded as
+skill context.
 
 ## Kunshan GROMACS 2026.3 / gfx906
 
@@ -15,11 +16,46 @@ All HIP runs used `-nb gpu -pme gpu`; the two-rank run used `-npme 1`.
 | 2 MPI ranks, 2 GPUs, 4 threads each | 26.7 ns/day |
 | 2 MPI ranks, 2 GPUs, forced GPU-aware MPI | 0.79 ns/day |
 
+## GROMACS 2026.4 reference build
+
+Lysozyme-in-water TPR, 71,844 atoms, 200 steps, same reference node type.
+All HIP runs used `srun` with `SLURM_MPI_TYPE=pmix`, `-nb gpu -pme gpu`; multi-rank
+runs used `-npme 1`.
+
+| Configuration | Performance |
+| --- | ---: |
+| 1 GPU, 1 rank | 29.0 ns/day |
+| 2 GPUs, 2 ranks | 27.3 ns/day |
+| 4 GPUs, 4 ranks, one node | 43.1 ns/day |
+| 4 GPUs, 4 ranks, two nodes | 43.5 ns/day |
+
+The two-node run used one rank/GPU per node and `UCX_NET_DEVICES` restricted to
+the working HCA. It was not faster than the single-node four-GPU run for this
+small system; the result is communication- and size-limited, not a claim that
+multi-node provides no benefit.
+
+## Cross-node transport check
+
+On the same 71,844-atom case, 4 ranks across 2 nodes, 200 steps:
+
+| Transport | Result |
+| --- | --- |
+| UCX, working HCA (`mlx5_0:1`) | 41.3 ns/day, pass |
+| UCX, default HCA selection | failed before mdrun (`ibv_create_ah`, invalid argument) |
+| OB1/TCP fallback | 32.0 ns/day, pass |
+
+OB1 is a fallback, not the best default on this fabric. Keep the HCA/transport
+choice site-configurable; do not hardcode OB1.
+
 Interpretation:
 
-- two GPUs were slower for this small system; the likely costs are domain
-  decomposition/communication and PME decomposition, not lack of GPU support;
+- two GPUs were slower than one for this small system; the likely costs are
+  domain decomposition/communication and PME decomposition, not lack of GPU
+  support;
 - forcing GPU-aware MPI completed, but the platform MPI path was unusably slow.
-  Do not enable `GMX_FORCE_GPU_AWARE_MPI` without measuring it on the target MPI;
+  The reference UCX build was configured without ROCm, so GPU-aware MPI is not
+  available. Do not enable `GMX_FORCE_GPU_AWARE_MPI` without measuring it;
+- cross-node results are sensitive to allocation balance, Slurm PMIx and HCA
+  selection; a blank account must re-run the transport check;
 - this does not predict behavior for larger systems. Use a representative
-  benchmark case before making multi-GPU scaling or performance claims.
+  benchmark case before making multi-GPU or multi-node performance claims.

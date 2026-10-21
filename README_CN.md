@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.5.1
+当前版本：0.6.0
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -35,6 +35,29 @@ CPU 运行是数值 oracle。GPU 运行只证明集成和运行时，不宣称�
 
 bundled case 只是 smoke test。它们覆盖部分 PME 分解、GPU-aware MPI 和 PMPI
 路径，但不能证明多节点扩展或生产规模精度。
+
+## 版本覆盖与空白账户基线
+
+本 skill 不打包 GROMACS。空白 SCNet 账户必须提供站点 module 或自己的构建。
+下表的“覆盖”表示在参考环境跑通过，不代表每个账户/集群都自动可用。
+
+| GROMACS | CPU | HIP | PME | 多 rank PME | 多 GPU | 多节点 | PMPI |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026.3 | 是 | 是 | 是 | 是 | 是 | 是 | 是 |
+| 2026.4 | 是 | 是 | 是 | 是 | 是 | 是 | 未测试 |
+
+2026.4 参考构建来自官方源码，通过私有 module 路径验证；它不是站点发布
+module。依据、多节点/UCX 发现和新账户最低证据要求见
+[references/version-coverage.md](references/version-coverage.md)。
+
+用户自有构建可以不使用 module：
+
+```text
+GROMACS_MODULE=""
+GROMACS_GPU_MODULE=""
+GROMACS_BINARY=/absolute/path/to/gmx_mpi
+GROMACS_ENV_SCRIPT=/absolute/path/to/env.sh
+```
 
 ## 工作流
 
@@ -81,13 +104,21 @@ GROMACS_RUN_ROOT   唯一可写运行目录
 资源必须至少提供 `ranks * threads` 个 CPU。HIP 验证当前要求每个 rank 一个
 DCU。PME case 设置 `GROMACS_NPME=1` 可请求独立 PME rank。
 
-昆山实测 launcher 行为：
+昆山参考环境 launcher 行为：
 
-- 自建 OpenMPI 5 module 用 `mpirun` 能正确连接 rank；`srun` 在该环境启动了
-  彼此独立的 singleton rank；
+- 自建 OpenMPI 5 module 支持 Slurm PMIx。设置 `SLURM_MPI_TYPE=pmix` 后
+  `srun` 可以正确连接多 rank；不设置时 `srun` 会启动 singleton rank；
+- 多节点分配必须用 `#SBATCH --ntasks-per-node=...` 平衡；否则调度器可能把
+  大部分 rank 放到一个节点，GROMACS 的 GPU 任务分配会失败；
 - PMPI module 的平台 OpenMPI 4.1.5 没有 Slurm PMI 支持。多 rank 需要
-  `mpirun` 加 MPI transport 覆盖，例如 profile 中
-  `MPI_ENV_OMPI_MCA_PML=ob1`，以避开 UCX/InfiniBand abort。
+  `mpirun` 加 MPI transport 覆盖，例如 `MPI_ENV_OMPI_MCA_PML=ob1`；
+- 跨节点 UCX 在某个 HCA 路径上失败；把 `UCX_NET_DEVICES` 限制到可用 HCA 后
+  UCX 通过并快于 OB1/TCP。OB1 是 fallback，不是通用最佳实践；transport/HCA
+  选择应保持站点可配置。
+
+这些是参考站点观察，不是通用 launcher 结论。跨节点运行设置 `NODES`、
+`MPI_RANKS`、`MPI_RANKS_PER_NODE`，必要时设置 `SCHEDULER_OPTIONS`；runner 会
+平衡分配并向 `srun` 传 `--ntasks-per-node`。
 
 这些是站点观察，不是通用 launcher 结论。
 
@@ -165,28 +196,39 @@ smoke 记录的能量列都是有限数值。PME 运行还比较 `Coulomb (SR)`�
 
 性能表征是独立工作。`benchmarks/catalog.json` 只提供公开 benchmark 类别和
 测量字段，不作为 skill 上下文加载，也不提交性能数值；`benchmarks/observations.md`
-单独保存短小的本地观察。扩展性结论必须使用代表性体系；如果多 GPU 扩展不好，
-要报告实测原因（体系规模、通信、PME 分解、GPU-aware MPI、负载不均或 I/O），
-不能省略。本站点小体系 2 GPU 比 1 GPU 慢，强制 GPU-aware MPI 更慢；没有实测
-不要启用。
+单独保存参考站点的短小观察。扩展性结论必须使用代表性体系。
+
+参考 2026.4 Lysozyme，71,844 原子，200 步：
+
+| 配置 | 性能 |
+| --- | ---: |
+| 1 GPU | 29.0 ns/day |
+| 2 GPU | 27.3 ns/day |
+| 4 GPU，单节点 | 43.1 ns/day |
+| 4 GPU，双节点 | 43.5 ns/day |
+
+该小体系 2 GPU 比 1 GPU 慢，4 GPU 为次线性扩展；实测原因是体系规模、
+分解/通信和 PME 开销，不是 GPU 不可用。跨节点 4 rank/2 节点传输检查：
+可用 UCX HCA 路径 41.3 ns/day，OB1/TCP fallback 32.0 ns/day，默认 UCX HCA
+在 mdrun 前失败。OB1 是 fallback，不是默认。强制 GPU-aware MPI 明显变慢；
+没有实测不要启用。
 
 检查器依赖当前 smoke 脚本写出的 `inputs.sha256`；旧版脚本的历史 run 没有该文件。
 
 ## 昆山实测范围
 
-已安装的昆山 module 在 gfx906 上实测：GROMACS 2026.3、GCC 16.2、
+参考环境在 gfx906 上实测了 GROMACS 2026.3 和 GROMACS 2026.4 参考构建，
 OpenMPI 5.0.11、DTK 26.04、HIP 6.3.26113、rocFFT 1.0.28。已验证路径包括
-单 rank CPU/HIP、PME GPU、双 rank CPU PME 分解、双 rank/双 GPU HIP 和 PME、
-微 case 强制 GPU-aware MPI，以及 PMPI 单 rank 和带 OB1 transport 覆盖的
-多 rank/多 GPU。
+单 rank CPU/HIP、PME GPU、双 rank PME 分解、双 rank/双 GPU HIP 和 PME、
+微 case 强制 GPU-aware MPI、PMPI 单 rank/多 rank/多 GPU，以及双节点/4 GPU。
 
-还通过 `GROMACS_MODULEPATH` 验证了一个私有的 GROMACS 2026.4 候选构建：
-Argon 和 PME CPU/HIP 都完成并通过容差检查。它是本地验证构建，不是站点发布
-module，并且需要本地工具链兼容处理；不能据此认为站点 module 已升级。
+2026.4 构建来自官方源码，通过私有 module 路径验证；它不是站点发布 module，
+并且需要本地工具链兼容处理。空白账户必须提供自己的 module 或构建，仓库不
+打包 GROMACS。详见 [references/version-coverage.md](references/version-coverage.md)。
 
-正常作业都以 `status=passed` 完成，比较通过。这些是单节点、短时、微 case
-结果，不代表生产精度、多节点扩展或性能。PMPI 多 rank 依赖站点 MPI transport
-配置。
+正常 smoke 作业都以 `status=passed` 完成，比较通过。这些是短时、微 case
+结果，不代表生产精度。性能观察是独立的参考站点测量，不是生产 benchmark，
+也不是跨站点保证。
 
 ## 提炼的 DCU 移植经验
 

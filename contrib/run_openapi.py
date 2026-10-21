@@ -205,10 +205,11 @@ def build_command(case, mode, run_root, remote_scripts, remote_case, settings):
     env = {
         "GROMACS_RUN_ROOT": str(run_root / "results-{}".format(case)),
         "GROMACS_MODULE": settings["module"],
-        "GROMACS_BINARY": "gmx_mpi",
+        "GROMACS_BINARY": settings["binary"],
         "GROMACS_GPU_MODE": mode,
         "GROMACS_ENERGY_TERMS": case_info["energy_terms"],
         "GROMACS_MPI_RANKS": str(settings["ranks"]),
+        "GROMACS_MPI_RANKS_PER_NODE": str(settings["ranks_per_node"]),
         "GROMACS_OMP_THREADS": str(settings["omp_threads"]),
         "GROMACS_MPI_LAUNCHER": settings["launcher"],
     }
@@ -216,6 +217,8 @@ def build_command(case, mode, run_root, remote_scripts, remote_case, settings):
         env["GROMACS_EXPECT_VERSION"] = settings["expect_version"]
     if settings["module_path"]:
         env["GROMACS_MODULEPATH"] = settings["module_path"]
+    if settings["env_script"]:
+        env["GROMACS_ENV_SCRIPT"] = settings["env_script"]
     if mode == "hip":
         if settings["gpu_arch"]:
             env["GROMACS_EXPECT_GPU_ARCH"] = settings["gpu_arch"]
@@ -265,7 +268,7 @@ def submit_mode(scnet, case, mode, run_root, remote_scripts, remote_case, settin
         "--queue",
         settings["queue"],
         "--nodes",
-        "1",
+        str(settings["nodes"]),
         "--cpus",
         str(settings["cpus"]),
         "--walltime",
@@ -273,6 +276,8 @@ def submit_mode(scnet, case, mode, run_root, remote_scripts, remote_case, settin
     ]
     if mode == "hip":
         args.extend(["--dcus", str(settings["dcus"])])
+    for option in settings["scheduler_options"]:
+        args.extend(["--scheduler-option", option])
     data = scnet.run(*args)
     try:
         return int(data["job_id"])
@@ -446,9 +451,13 @@ def main(argv=None):
     parser.add_argument("--hip-queue")
     parser.add_argument("--cpu-module")
     parser.add_argument("--hip-module")
+    parser.add_argument("--binary")
+    parser.add_argument("--env-script")
     parser.add_argument("--cpus", type=int)
     parser.add_argument("--dcus", type=int)
+    parser.add_argument("--nodes", type=int)
     parser.add_argument("--mpi-ranks", type=int)
+    parser.add_argument("--ranks-per-node", type=int)
     parser.add_argument("--omp-threads", type=int)
     parser.add_argument("--mpi-launcher")
     parser.add_argument("--npme")
@@ -481,13 +490,30 @@ def main(argv=None):
 
         cpu_queue = args.cpu_queue or profile.get("CPU_PARTITION")
         hip_queue = args.hip_queue or profile.get("DCU_PARTITION")
-        cpu_module = args.cpu_module or profile.get("GROMACS_MODULE")
-        hip_module = args.hip_module or profile.get("GROMACS_GPU_MODULE")
+        cpu_module = (
+            args.cpu_module
+            if args.cpu_module is not None
+            else profile.get("GROMACS_MODULE", "")
+        )
+        hip_module = (
+            args.hip_module
+            if args.hip_module is not None
+            else profile.get("GROMACS_GPU_MODULE", "")
+        )
+        binary = args.binary or profile.get("GROMACS_BINARY") or "gmx_mpi"
+        env_script = args.env_script or profile.get("GROMACS_ENV_SCRIPT", "")
         gpu_arch = profile.get("GPU_ARCH")
         expect_version = profile.get("GROMACS_EXPECT_VERSION")
         module_path = profile.get("GROMACS_MODULEPATH", "")
         try:
             ranks = args.mpi_ranks or int(profile.get("MPI_RANKS", "1"))
+            nodes = args.nodes or int(profile.get("NODES", "1"))
+            if args.ranks_per_node is not None:
+                ranks_per_node = args.ranks_per_node
+            elif profile.get("MPI_RANKS_PER_NODE"):
+                ranks_per_node = int(profile["MPI_RANKS_PER_NODE"])
+            else:
+                ranks_per_node = ranks if nodes == 1 else 0
             omp_threads = args.omp_threads or int(
                 profile.get("OMP_THREADS", "2")
             )
@@ -510,6 +536,17 @@ def main(argv=None):
             if not name or not name.replace("_", "a").isalnum():
                 raise RunnerError("invalid MPI_ENV_ key: {}".format(key))
             mpi_env[name] = value
+        scheduler_options = [
+            option.strip()
+            for option in profile.get("SCHEDULER_OPTIONS", "").split(";")
+            if option.strip()
+        ]
+        if nodes > 1 and not scheduler_options:
+            scheduler_options = [
+                "#SBATCH --ntasks-per-node={}".format(
+                    ranks_per_node * omp_threads
+                )
+            ]
         force_gpu_aware = args.force_gpu_aware or profile.get(
             "FORCE_GPU_AWARE_MPI", "0"
         ).lower() in ("1", "true", "yes")
@@ -517,8 +554,18 @@ def main(argv=None):
             "REQUIRE_GPU_AWARE_MPI", "0"
         ).lower() in ("1", "true", "yes")
 
-        if ranks < 1 or omp_threads < 1:
-            raise RunnerError("MPI ranks and OpenMP threads must be positive")
+        if ranks < 1 or omp_threads < 1 or nodes < 1:
+            raise RunnerError("MPI ranks, nodes and OpenMP threads must be positive")
+        if ranks_per_node < 1:
+            raise RunnerError(
+                "multi-node runs need --ranks-per-node or MPI_RANKS_PER_NODE"
+            )
+        if ranks > nodes * ranks_per_node:
+            raise RunnerError(
+                "MPI ranks {} exceed {} nodes * {} ranks/node".format(
+                    ranks, nodes, ranks_per_node
+                )
+            )
         if cpus < ranks * omp_threads:
             raise RunnerError(
                 "CPU request {} is smaller than ranks*threads={}*{}".format(
@@ -531,18 +578,18 @@ def main(argv=None):
             require_gpu_aware = True
 
         modes = ("cpu", "hip") if args.mode == "both" else (args.mode,)
-        if "hip" in modes and dcus != ranks:
+        if "hip" in modes and dcus != ranks_per_node:
             raise RunnerError(
-                "HIP validation requires one DCU per MPI rank "
-                "(ranks={}, dcus={})".format(ranks, dcus)
+                "HIP validation requires one DCU per MPI rank per node "
+                "(ranks_per_node={}, dcus={})".format(ranks_per_node, dcus)
             )
-        if "cpu" in modes and (not cpu_queue or not cpu_module):
+        if "cpu" in modes and not cpu_queue:
             raise RunnerError(
-                "CPU mode needs --cpu-queue and --cpu-module or a profile"
+                "CPU mode needs --cpu-queue or a CPU queue in the profile"
             )
-        if "hip" in modes and (not hip_queue or not hip_module):
+        if "hip" in modes and not hip_queue:
             raise RunnerError(
-                "HIP mode needs --hip-queue and --hip-module or a profile"
+                "HIP mode needs --hip-queue or a DCU queue in the profile"
             )
         if args.wait_timeout < 1:
             raise RunnerError("--wait-timeout must be positive")
@@ -589,10 +636,14 @@ def main(argv=None):
                 settings = {
                     "queue": cpu_queue if mode == "cpu" else hip_queue,
                     "module": cpu_module if mode == "cpu" else hip_module,
+                    "binary": binary,
+                    "env_script": env_script,
                     "gpu_arch": gpu_arch,
                     "expect_version": expect_version,
                     "module_path": module_path,
+                    "nodes": nodes,
                     "ranks": ranks,
+                    "ranks_per_node": ranks_per_node,
                     "omp_threads": omp_threads,
                     "launcher": launcher,
                     "npme": npme,
@@ -601,6 +652,7 @@ def main(argv=None):
                     "require_gpu_aware": require_gpu_aware,
                     "cpus": cpus,
                     "dcus": dcus,
+                    "scheduler_options": scheduler_options,
                     "walltime": walltime,
                 }
                 job_id = submit_mode(

@@ -57,6 +57,15 @@ is a site hint, not live evidence.
 tolerance checker. The scheduler state, platform exit status and workload
 `status=passed` are still checked separately.
 
+## Blank-account baseline
+
+Do not assume the maintainer's modules, prefixes or modulefiles. A blank SCNet
+account must provide a site module or a user-owned build through
+`GROMACS_MODULE`, `GROMACS_MODULEPATH`, `GROMACS_BINARY` and/or
+`GROMACS_ENV_SCRIPT`. The probe and version gate run before any capability claim.
+Coverage declared in [version-coverage.md](version-coverage.md) is evidence from
+the reference environment, not a bundled dependency.
+
 ## CPU/HIP tolerance contract
 
 Compare the two energy time series with
@@ -95,10 +104,11 @@ Treat a new module as a new target, not a drop-in replacement:
    notes. Do not silently widen tolerances or claim support from a version
    string alone.
 
-A private 2026.4 candidate build was validated through `GROMACS_MODULEPATH` on
-Argon and PME CPU/HIP. It is not a site module and is not evidence that the site
-inventory has changed. Candidate builds may need local toolchain compatibility
-work; keep that work private and do not commit site paths or build logs.
+A 2026.4 reference build from the official source was validated through a private
+module path on Argon and PME CPU/HIP, two-node/four-GPU execution and the version
+gate. It is not a site module and is not evidence that a blank account has it.
+Candidate builds may need local toolchain compatibility work; keep that work
+private and do not commit site paths or build logs.
 
 On this DTK 26.04 site, the 2026.4 build used GCC 13.3 as the HIP host toolchain;
 GCC 16.2 with the DTK Clang 17 HIP compiler hit a libstdc++ header
@@ -128,7 +138,16 @@ Observed on Kunshan:
 - forced GPU-aware MPI completed on the two-rank/two-GPU micro-case, but that is
   not evidence of GPU-aware performance or correctness at scale. On a short
   71,844-atom Lysozyme run, forced GPU-aware MPI was much slower than the default
-  path; measure before enabling it.
+  path; measure before enabling it. The reference UCX build was configured
+  without ROCm, so GPU-aware MPI is not available.
+- on this reference cluster, multi-node OpenMPI 5 needed `srun` with
+  `SLURM_MPI_TYPE=pmix`, and the allocation had to be balanced with
+  `#SBATCH --ntasks-per-node=...`. Without balance, ranks concentrated on one
+  node and GROMACS failed its GPU task assignment.
+- default UCX selected a non-working HCA on the cross-node path
+  (`ibv_create_ah`/invalid argument). Restricting `UCX_NET_DEVICES` to the working
+  HCA made UCX pass and outperform OB1/TCP. OB1 is a fallback, not a universal
+  best practice; keep the transport/HCA choice site-configurable.
 
 These are site observations. Record the launcher, MPI transport and exact rank
 topology with any multi-rank result.
@@ -179,5 +198,5 @@ Apply the generic DCU principles even when validating a mature application:
 - separate host/device data movement and diagnostic traces;
 - visible test registration and nonzero failure propagation;
 - scheduler state plus workload exit status;
-- record untested boundaries (multi-node scaling, PME decomposition,
-  production-size systems, precision drift).
+- record untested boundaries (larger multi-node scaling, production-size
+  systems, precision drift, other fabrics and account baselines).

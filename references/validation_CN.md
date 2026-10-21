@@ -49,6 +49,14 @@ PP/PME 是否真正在设备上执行，仍由目标节点探针和日志决定�
 `--mode both` 会提交 CPU 和 HIP，下载两套结果并运行容差检查；调度器状态、平台
 退出码和 workload `status=passed` 仍分别检查。
 
+## 空白账户基线
+
+不要假设维护者的 module、安装前缀或 modulefile。空白 SCNet 账户必须通过
+`GROMACS_MODULE`、`GROMACS_MODULEPATH`、`GROMACS_BINARY` 和/或
+`GROMACS_ENV_SCRIPT` 提供站点 module 或自有构建。探针和版本门禁先于任何能力
+声明。[version-coverage.md](version-coverage.md) 中的覆盖是参考环境证据，不是
+仓库自带的依赖。
+
 ## CPU/HIP 容差契约
 
 使用 `scripts/compare_gromacs_energy.py` 比较两条能量时间序列。两个 run 都必须
@@ -81,9 +89,10 @@ PP/PME 是否真正在设备上执行，仍由目标节点探针和日志决定�
 6. 更新 profile 的 module、期望版本、CHANGELOG 和实测范围说明。不要静默放宽
    容差，也不要仅凭版本字符串宣称支持。
 
-已通过 `GROMACS_MODULEPATH` 验证一个私有 2026.4 候选构建的 Argon 和 PME
-CPU/HIP。它不是站点 module，不能据此认为站点软件清单已变化。候选构建可能需要
-本地工具链兼容处理；这些工作保持私有，不提交站点路径或构建日志。
+已通过私有 module 路径验证一个来自官方源码的 2026.4 参考构建的 Argon/PME
+CPU/HIP、双节点/4 GPU 和版本门禁。它不是站点 module，不能据此认为空白账户
+已经拥有它。候选构建可能需要本地工具链兼容处理；这些工作保持私有，不提交
+站点路径或构建日志。
 
 在该 DTK 26.04 站点上，2026.4 构建使用 GCC 13.3 作为 HIP host 工具链；
 GCC 16.2 配 DTK Clang 17 HIP 编译器会触发 libstdc++ 头文件不兼容。CMake 4.4.3
@@ -109,7 +118,14 @@ GPU 数量。这些事实不能从申请的分配资源推断。
   UCX/InfiniBand abort；
 - 双 rank/双 GPU 微 case 强制 GPU-aware MPI 可以完成，但这不能作为规模化
   GPU-aware 性能或正确性证据。在一次 71,844 原子的短 Lysozyme 运行中，强制
-  GPU-aware MPI 明显慢于默认路径；启用前必须实测。
+  GPU-aware MPI 明显慢于默认路径；启用前必须实测。参考 UCX 构建未启用 ROCm，
+  因此 GPU-aware MPI 不可用。
+- 在该参考集群，多节点 OpenMPI 5 需要 `srun` 加
+  `SLURM_MPI_TYPE=pmix`，并且分配必须用 `#SBATCH --ntasks-per-node=...` 平衡。
+  不平衡时 rank 会集中到一个节点，GROMACS GPU 任务分配失败。
+- 跨节点默认 UCX 选择了不可用的 HCA（`ibv_create_ah`/invalid argument）。
+  将 `UCX_NET_DEVICES` 限制到可用 HCA 后 UCX 通过并快于 OB1/TCP。OB1 是
+  fallback，不是通用最佳实践；transport/HCA 应保持站点可配置。
 
 这些是站点观察。任何多 rank 结果都要记录 launcher、MPI transport 和准确的
 rank/GPU 拓扑。
@@ -154,4 +170,5 @@ OpenAPI 优先 runner 已在 Argon 和 PME case 上完成端到端实测，CPU/H
 - 区分 host/device 数据移动和诊断 trace；
 - 测试必须可见，失败要传播为非零状态；
 - 同时记录调度器状态和 workload 退出码；
-- 记录未覆盖边界：多节点扩展、PME 分解、生产规模体系和精度漂移。
+- 记录未覆盖边界：更大规模多节点扩展、生产规模体系、精度漂移、其他 fabric
+  和账户基线。

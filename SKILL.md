@@ -32,13 +32,24 @@ SCNet. Read [references/validation.md](references/validation.md) first.
   count. Do not infer these from the requested resources.
 - Propagate nonzero `grompp`, `mdrun`, checker and scheduler statuses.
 
-## Execution profiles
+## Execution profiles and blank accounts
 
 Copy `clusters/_template.conf` to a private `clusters/<profile>.conf` and set the
 CPU/DCU queues, CPU/HIP modules, CPU count, DCU count, walltime and expected
 GROMACS version. The template is Z100/DCU-oriented but is not live availability
 evidence. The optional runner passes `--dcus` only for HIP jobs and refuses
 existing remote run roots.
+
+Do not assume the maintainer's module or prefix. A blank SCNet account may use a
+site module, a private module path, or a user-owned binary plus environment
+script. `GROMACS_MODULE` may be empty; set `GROMACS_BINARY` and optionally
+`GROMACS_ENV_SCRIPT`. Coverage in `references/version-coverage.md` is reference
+evidence, not a bundled GROMACS distribution.
+
+For multi-node work set `NODES`, `MPI_RANKS` and `MPI_RANKS_PER_NODE`. On the
+reference OpenMPI 5 build, `srun` needs `SLURM_MPI_TYPE=pmix`; the allocation must
+be balanced with `--ntasks-per-node`. Keep the UCX HCA/transport choice
+configurable; OB1 is a fallback, not a universal default.
 
 When the site module changes, update the profile module/version, rerun the same
 CPU/HIP/PME cases and record the new evidence. Do not silently change tolerances

@@ -10,7 +10,7 @@
 set -euo pipefail
 
 : "${GROMACS_RUN_ROOT:?set a writable unique run root}"
-module_name="${GROMACS_MODULE:-gromacs/2026.3}"
+module_name="${GROMACS_MODULE-gromacs/2026.3}"
 binary="${GROMACS_BINARY:-gmx_mpi}"
 mode="${GROMACS_GPU_MODE:-cpu}"
 gpu_pme="${GROMACS_GPU_PME:-0}"
@@ -18,12 +18,14 @@ gpu_arch="${GROMACS_EXPECT_GPU_ARCH:-}"
 expect_version="${GROMACS_EXPECT_VERSION:-}"
 energy_terms="${GROMACS_ENERGY_TERMS:-Potential,Kinetic-En.,Temperature,LJ-(SR)}"
 ranks="${GROMACS_MPI_RANKS:-1}"
+ranks_per_node="${GROMACS_MPI_RANKS_PER_NODE:-}"
 omp_threads="${GROMACS_OMP_THREADS:-${SLURM_CPUS_PER_TASK:-2}}"
 npme="${GROMACS_NPME:-}"
 expect_gpu_count="${GROMACS_EXPECT_GPU_COUNT:-}"
 force_gpu_aware="${GROMACS_FORCE_GPU_AWARE_MPI:-0}"
 launcher="${GROMACS_MPI_LAUNCHER:-srun}"
 module_path="${GROMACS_MODULEPATH:-}"
+env_script="${GROMACS_ENV_SCRIPT:-}"
 case_root="${GROMACS_CASE_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/cases/argon8}"
 gro="${GROMACS_CASE_GRO:-argon.gro}"
 deffnm="${GROMACS_DEFFNM:-argon}"
@@ -47,11 +49,16 @@ if [ "$force_gpu_aware" = 1 ]; then
     export GMX_FORCE_GPU_AWARE_MPI=1
 fi
 
-module purge
-if [ -n "$module_path" ]; then
-    module use "$module_path"
+if [ -n "$module_name" ]; then
+    module purge
+    if [ -n "$module_path" ]; then
+        module use "$module_path"
+    fi
+    module load "$module_name"
+elif [ -n "$env_script" ]; then
+    # shellcheck disable=SC1090
+    source "$env_script"
 fi
-module load "$module_name"
 "$binary" --version >"$run/version.txt" 2>&1
 actual_version=$(awk '/^GROMACS version:/ {print $3; exit}' "$run/version.txt")
 if [ -n "$expect_version" ] && [ "$actual_version" != "$expect_version" ]; then
@@ -61,8 +68,8 @@ if [ -n "$expect_version" ] && [ "$actual_version" != "$expect_version" ]; then
     echo "expected GROMACS version $expect_version, got ${actual_version:-unknown}" >&2
     exit 3
 fi
-printf 'host=%s\nmodule=%s\nbinary=%s\nmode=%s\npme_gpu=%s\ngpu_arch=%s\ngromacs_version=%s\ngromacs_expect=%s\nenergy_terms=%s\nmpi_ranks=%s\nomp_threads=%s\nnpme=%s\nexpect_gpu_count=%s\nforce_gpu_aware=%s\ncase=%s\n' \
-    "$(hostname)" "$module_name" "$binary" "$mode" "$gpu_pme" "$gpu_arch" \
+printf 'host=%s\nmodule=%s\nbinary=%s\nenv_script=%s\nmode=%s\npme_gpu=%s\ngpu_arch=%s\ngromacs_version=%s\ngromacs_expect=%s\nenergy_terms=%s\nmpi_ranks=%s\nomp_threads=%s\nnpme=%s\nexpect_gpu_count=%s\nforce_gpu_aware=%s\ncase=%s\n' \
+    "$(hostname)" "$module_name" "$binary" "$env_script" "$mode" "$gpu_pme" "$gpu_arch" \
     "$actual_version" "$expect_version" "$energy_terms" "$ranks" \
     "$omp_threads" "$npme" "$expect_gpu_count" "$force_gpu_aware" "$gro" \
     | tee "$run/result.txt"
@@ -103,7 +110,11 @@ if [ "$ranks" -gt 1 ]; then
                 >mdrun.log 2>&1
             ;;
         *)
-            "$launcher" --ntasks="$ranks" --cpus-per-task="$omp_threads" \
+            srun_args=(--ntasks="$ranks" --cpus-per-task="$omp_threads")
+            if [ -n "$ranks_per_node" ]; then
+                srun_args+=(--ntasks-per-node="$ranks_per_node")
+            fi
+            "$launcher" "${srun_args[@]}" \
                 "$gmx" mdrun "${mdrun_args[@]}" >mdrun.log 2>&1
             ;;
     esac

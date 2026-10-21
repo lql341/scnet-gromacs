@@ -21,6 +21,7 @@ test -s "$root/cases/ionpair_pme/topol.top"
 test -s "$root/cases/ionpair_pme/md.mdp"
 test -s "$root/benchmarks/catalog.json"
 test -s "$root/benchmarks/observations.md"
+test -s "$root/references/version-coverage.md"
 python3 -m json.tool "$root/benchmarks/catalog.json" >/dev/null
 if grep -RInE '/public/home/|/home/[A-Za-z0-9_.-]+/' \
     "$root"/README* "$root"/references \

@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.5.1
+Current release: 0.6.0
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -42,6 +42,31 @@ differences must be reported with tolerances and physical sanity checks.
 The bundled cases are only smoke tests. They exercise selected PME
 decomposition, GPU-aware and PMPI paths, but do not establish multi-node
 scaling or production-size accuracy.
+
+## Version coverage and blank-account baseline
+
+The skill does not bundle GROMACS. A blank SCNet account must provide a site
+module or its own build. Coverage below means the path was exercised on the
+reference environment; it is not a guarantee for every account or cluster.
+
+| GROMACS | CPU | HIP | PME | multi-rank PME | multi-GPU | multi-node | PMPI |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026.3 | yes | yes | yes | yes | yes | yes | yes |
+| 2026.4 | yes | yes | yes | yes | yes | yes | not tested |
+
+The 2026.4 reference build came from the official 2026.4 source and was exercised
+through a private module path; it is not a site-published module. See
+[references/version-coverage.md](references/version-coverage.md) for the basis,
+multi-node/UCX findings and the minimum evidence needed for a new account.
+
+A user-owned build can be selected without a module:
+
+```text
+GROMACS_MODULE=""
+GROMACS_GPU_MODULE=""
+GROMACS_BINARY=/absolute/path/to/gmx_mpi
+GROMACS_ENV_SCRIPT=/absolute/path/to/env.sh
+```
 
 ## Workflow
 
@@ -93,13 +118,24 @@ with a PME case to request a separate PME rank.
 
 Observed launcher behavior on Kunshan:
 
-- the self-built OpenMPI 5 module connected ranks with `mpirun`; `srun`
-  launched singleton ranks in this environment;
+- the self-built OpenMPI 5 module supports Slurm PMIx. Multi-rank jobs work with
+  `srun` when `SLURM_MPI_TYPE=pmix` is set; without it, `srun` launched singleton
+  ranks;
+- a multi-node allocation must be balanced with `#SBATCH --ntasks-per-node=...`.
+  Otherwise the scheduler can place most ranks on one node and GROMACS fails its
+  GPU task assignment;
 - the PMPI module's platform OpenMPI 4.1.5 is not Slurm-PMI enabled. Its
   multi-rank path needed `mpirun` plus an MPI transport override, for example
-  `MPI_ENV_OMPI_MCA_PML=ob1` in the profile, to avoid a UCX/InfiniBand abort.
+  `MPI_ENV_OMPI_MCA_PML=ob1`;
+- cross-node UCX initially failed on one HCA path. Restricting
+  `UCX_NET_DEVICES` to the working HCA made UCX pass and outperform the OB1/TCP
+  fallback. OB1 is a fallback, not a universal best practice; keep the
+  transport/HCA choice site-configurable.
 
-These are site observations, not universal launcher recommendations.
+These are reference-site observations, not universal launcher recommendations.
+For cross-node runs, set `NODES`, `MPI_RANKS`, `MPI_RANKS_PER_NODE` and, if
+needed, `SCHEDULER_OPTIONS`; the runner balances the allocation and passes
+`--ntasks-per-node` to `srun`.
 
 ## Optional OpenAPI runner
 
@@ -189,34 +225,48 @@ forced GPU-aware MPI.
 Performance characterization is separate. `benchmarks/catalog.json` is a
 public catalog of benchmark classes and measurement fields; it is deliberately
 not loaded as skill context and contains no committed performance values.
-`benchmarks/observations.md` keeps short local results separate. Use a
-representative system for scaling claims. If multi-GPU scaling is poor, report
-the measured reason (system size, communication, PME decomposition, GPU-aware
-MPI, load imbalance or I/O) rather than omitting the result. On this site, a
-small 2-GPU run was slower than 1 GPU, and forcing GPU-aware MPI was much slower;
-do not enable it without measuring.
+`benchmarks/observations.md` keeps short reference-site results separate. Use a
+representative system for scaling claims.
+
+Reference 2026.4 Lysozyme run, 71,844 atoms, 200 steps:
+
+| Configuration | Performance |
+| --- | ---: |
+| 1 GPU | 29.0 ns/day |
+| 2 GPUs | 27.3 ns/day |
+| 4 GPUs, one node | 43.1 ns/day |
+| 4 GPUs, two nodes | 43.5 ns/day |
+
+Two GPUs were slower than one for this small system, and four GPUs were sublinear;
+the measured reason is system size, decomposition/communication and PME overhead,
+not lack of GPU support. A cross-node transport check with four ranks on two
+nodes measured 41.3 ns/day with the working UCX HCA path, 32.0 ns/day with the
+OB1/TCP fallback, and a default-UCX HCA failure before mdrun. OB1 is a fallback,
+not a default. Forced GPU-aware MPI was unusably slow; do not enable it without
+measurement.
 
 The checker needs the `inputs.sha256` file written by the current smoke script.
 Runs from older script versions do not contain it.
 
 ## Measured scope on Kunshan
 
-The installed Kunshan module was exercised on gfx906 with GROMACS 2026.3,
-GCC 16.2, OpenMPI 5.0.11, DTK 26.04, HIP 6.3.26113 and rocFFT 1.0.28. Validated
-paths include single-rank CPU/HIP, PME GPU, two-rank CPU PME decomposition,
-two-rank/two-GPU HIP and PME, forced GPU-aware MPI on the micro-case, and PMPI
-single-rank plus multi-rank/multi-GPU with an OB1 transport override.
+The reference environment was exercised on gfx906 with GROMACS 2026.3 and a
+GROMACS 2026.4 reference build, OpenMPI 5.0.11, DTK 26.04, HIP 6.3.26113 and
+rocFFT 1.0.28. Validated paths include single-rank CPU/HIP, PME GPU, two-rank
+PME decomposition, two-rank/two-GPU HIP and PME, forced GPU-aware MPI on the
+micro-case, PMPI single-rank plus multi-rank/multi-GPU, and two-node/four-GPU
+runs.
 
-A private GROMACS 2026.4 candidate build was also exercised through
-`GROMACS_MODULEPATH`: Argon and PME CPU/HIP completed and passed the tolerance
-checker. It is a local validation build, not a site-published module, and it
-required local toolchain compatibility work. Do not treat it as evidence that
-the site module has been upgraded.
+The 2026.4 build came from the official source and was validated through a
+private module path. It is not a site-published module and required local
+toolchain compatibility work. A blank account must provide its own module or
+build; the repository does not ship GROMACS. See
+[references/version-coverage.md](references/version-coverage.md).
 
-All normal runs completed with `status=passed`; comparisons passed. These are
-single-node, short, micro-case results. They do not establish production
-accuracy, multi-node scaling or performance. The PMPI multi-rank path depends on
-site MPI transport configuration.
+All normal smoke runs completed with `status=passed`; comparisons passed. These
+are short, micro-case results and do not establish production accuracy. The
+performance observations are separate reference-site measurements, not
+production benchmarks or cross-site guarantees.
 
 ## DCU porting lessons retained
 

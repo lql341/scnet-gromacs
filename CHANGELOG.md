@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.0 (2026-10-21)
+
+- Add a formal version-coverage declaration for 2026.3 and 2026.4, based on the
+  reference environment but not assuming a maintainer-owned module.
+- Support blank-account operation with no module: configurable module path,
+  absolute binary and environment script.
+- Add multi-node orchestration: node count, ranks per node, balanced scheduler
+  options and `srun --ntasks-per-node`.
+- Debug cross-node transport: `srun` plus Slurm PMIx works for OpenMPI 5; the
+  default UCX HCA path can fail, and a working `UCX_NET_DEVICES` path outperforms
+  the OB1/TCP fallback. OB1 remains a user-configurable fallback, not a default.
+- Expand the reference benchmark to 1/2/4 GPUs and two-node/four-GPU runs, with
+  observations kept outside skill context.
+
 ## 0.5.1 (2026-10-21)
 
 - Add a separate local performance-observation note for small-system multi-GPU
