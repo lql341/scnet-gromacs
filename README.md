@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.3.0
+Current release: 0.4.0
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -58,6 +58,7 @@ GROMACS_BINARY     binary name, default gmx_mpi
 GROMACS_GPU_MODE   cpu or hip, default cpu
 GROMACS_GPU_PME    1 to add -pme gpu, default 0; only for a PME-enabled case
 GROMACS_EXPECT_GPU_ARCH  optional expected gfx name, e.g. gfx906
+GROMACS_EXPECT_VERSION   optional expected GROMACS version, e.g. 2026.3
 GROMACS_NPME       optional -npme value; only for a real multi-rank job
 GROMACS_CASE_ROOT  case directory, default <repo>/cases/argon8
 GROMACS_CASE_GRO   input coordinate file, default argon.gro
@@ -74,16 +75,20 @@ On a single MPI rank, use `-pme gpu` without `-npme`. The installed GROMACS
 rejects `-npme` when only one rank is requested; set `GROMACS_NPME` only when
 the job really has multiple ranks.
 
-## OpenAPI-first runner
+## Optional OpenAPI runner
 
-The preferred execution path is `scripts/run_openapi.py`. It calls the installed
+The core validation path is still the three compute-node scripts. Optional
+orchestration lives in `contrib/run_openapi.py`; it calls the installed
 `scnet-hpc` CLI with `--backend openapi` for remote directory creation, script
 and case upload, submission, bounded wait, job-detail checking and artifact
-download. The normal path does not use SSH and does not implement a second
-credential or transport layer.
+download. You can also drive the same scripts directly with `scnet-hpc` without
+this wrapper. The wrapper does not use SSH and does not implement a second
+credential or transport layer. It looks for `scnet-hpc` in the sibling
+`../scnet-hpc` directory first, which matches a shared `skills/` tree; then it
+falls back to `SCNET_HPC_ROOT` and agent-specific skill directories.
 
 ```bash
-python3 scripts/run_openapi.py \
+python3 contrib/run_openapi.py \
   --cluster <scnet-hpc-profile> \
   --profile clusters/<scnet-hpc-profile>.conf \
   --run-root /absolute/new/remote/run-root \
@@ -104,7 +109,8 @@ DCU count and walltime. The template is Z100/DCU-oriented; it is a hint, not
 live availability evidence. Alternatively pass `--cpu-queue`, `--hip-queue`,
 `--cpu-module`, `--hip-module`, `--cpus`, `--dcus` and `--walltime` directly.
 The optional `GPU_ARCH` profile field is passed to the compute-node device check;
-for Z100 set `GPU_ARCH="gfx906"`.
+for Z100 set `GPU_ARCH="gfx906"`. `GROMACS_EXPECT_VERSION` pins the module
+version for a reproducible run; update it when the site module changes.
 
 OpenAPI credentials are configured only through `scnet-hpc`; never put AK/SK,
 private keys or site paths in this repository. If OpenAPI cannot expose a fact,

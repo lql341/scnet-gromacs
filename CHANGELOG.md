@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 (2026-10-21)
+
+- Make OpenAPI orchestration optional under `contrib/`; the compute-node
+  scripts remain the canonical validation path.
+- Default the optional runner's `scnet-hpc` lookup to the sibling
+  `../scnet-hpc` skill, so a shared `skills/` tree works without extra flags.
+- Add `GROMACS_EXPECT_VERSION` to pin the loaded module version and fail early
+  if a site upgrade does not match the selected profile.
+- Document the version-adaptation procedure for new GROMACS releases.
+
 ## 0.3.0 (2026-10-21)
 
 - Add an OpenAPI-first runner that uses scnet-hpc for remote mkdir, upload,

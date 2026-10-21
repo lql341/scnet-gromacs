@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.3.0
+当前版本：0.4.0
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -51,6 +51,7 @@ GROMACS_BINARY     可执行文件，默认 gmx_mpi
 GROMACS_GPU_MODE   cpu 或 hip，默认 cpu
 GROMACS_GPU_PME    设为 1 时增加 -pme gpu，默认 0；仅用于 PME case
 GROMACS_EXPECT_GPU_ARCH  可选的期望 gfx 名称，例如 gfx906
+GROMACS_EXPECT_VERSION   可选的期望 GROMACS 版本，例如 2026.3
 GROMACS_NPME       可选 -npme 值；仅用于真正的多 rank 作业
 GROMACS_CASE_ROOT  case 目录，默认 <repo>/cases/argon8
 GROMACS_CASE_GRO   输入坐标文件，默认 argon.gro
@@ -66,14 +67,17 @@ GROMACS_RUN_ROOT   唯一可写运行目录
 单 MPI rank 使用 `-pme gpu` 时不要加 `-npme`。已安装的 GROMACS 在只请求
 一个 rank 时会拒绝 `-npme`；只有真正的多 rank 作业才设置 `GROMACS_NPME`。
 
-## OpenAPI 优先的 runner
+## 可选的 OpenAPI runner
 
-首选执行路径是 `scripts/run_openapi.py`。它通过已安装的 `scnet-hpc` CLI 的
-`--backend openapi` 完成远端目录创建、脚本/case 上传、提交、限时等待、作业详情
-检查和结果下载；正常路径不使用 SSH，也不实现第二套凭证或传输层。
+核心验证路径仍然是三个计算节点脚本。可选编排放在 `contrib/run_openapi.py`；它
+通过已安装的 `scnet-hpc` CLI 的 `--backend openapi` 完成远端目录创建、脚本/case
+上传、提交、限时等待、作业详情检查和结果下载。也可以不使用该包装脚本，直接用
+`scnet-hpc` 驱动同一组脚本。包装脚本不使用 SSH，也不实现第二套凭证或传输层。它优先在同级 `../scnet-hpc`
+目录查找 `scnet-hpc`，与共享 `skills/` 目录布局一致；然后回退到
+`SCNET_HPC_ROOT` 和各个智能体的 skill 目录。
 
 ```bash
-python3 scripts/run_openapi.py \
+python3 contrib/run_openapi.py \
   --cluster <scnet-hpc-profile> \
   --profile clusters/<scnet-hpc-profile>.conf \
   --run-root /absolute/new/remote/run-root \
@@ -92,7 +96,8 @@ runner 会拒绝已存在的远端 run root 或本地下载目录。
 walltime。模板面向 Z100/DCU，但只是提示，不是实时可用性证据。也可以直接传
 `--cpu-queue`、`--hip-queue`、`--cpu-module`、`--hip-module`、`--cpus`、
 `--dcus`、`--walltime`。可选的 `GPU_ARCH` profile 字段会传给计算节点设备检查；
-Z100 设置为 `GPU_ARCH="gfx906"`。
+Z100 设置为 `GPU_ARCH="gfx906"`。`GROMACS_EXPECT_VERSION` 用于固定 module
+版本，站点升级 GROMACS 时同步更新。
 
 OpenAPI 凭证只通过 `scnet-hpc` 配置；不要在仓库中写入 AK/SK、私钥或站点路径。
 如果 OpenAPI 无法提供某个事实，SSH 只用于有限的诊断。

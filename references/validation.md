@@ -36,11 +36,12 @@ enough.
 
 ## OpenAPI execution path
 
-`scripts/run_openapi.py` is the default orchestration path. It invokes the
-installed `scnet-hpc` CLI with `--backend openapi` for remote mkdir, upload,
-submit, bounded wait, detailed job check and explicit artifact download. It
-does not use SSH, and it refuses to reuse an existing remote run root or local
-download directory.
+`contrib/run_openapi.py` is optional orchestration over the core compute-node
+scripts. It invokes the installed `scnet-hpc` CLI with `--backend openapi` for
+remote mkdir, upload, submit, bounded wait, detailed job check and explicit
+artifact download. It does not use SSH, and it refuses to reuse an existing
+remote run root or local download directory. The same scripts can be driven
+directly by `scnet-hpc` without the wrapper.
 
 The runner reads a private profile copied from `clusters/_template.conf` or
 accepts explicit queue/module/resource arguments. A profile `GPU_ARCH` value is
@@ -68,6 +69,32 @@ Defaults are `atol=0.05 kJ/mol` for `Potential` and `Kinetic En.`,
 `atol=0.5 K` for `Temperature`, and `rtol=1e-3`. These values are a smoke-level
 contract. A pass is not a bitwise-equality claim and does not extend to larger
 systems, longer trajectories, other precisions or other architectures.
+
+## Adapting to a new GROMACS version
+
+Treat a new module as a new target, not a drop-in replacement:
+
+1. Probe the module on a compute node and record `gmx_mpi --version`, compiler,
+   MPI, HIP/DTK, rocFFT, GPU support and architecture.
+2. Set `GROMACS_EXPECT_VERSION` in the private profile to the intended version.
+   The smoke job writes `status=failed_version` and exits nonzero if the loaded
+   binary differs.
+3. Re-run the Argon CPU and HIP cases. Check the completion marker, GPU
+   selection, finite energies and scheduler/workload status. If a log marker
+   changed, update the checker from observed evidence rather than guessing.
+4. Re-run the PME case. Confirm that PME work is still executed on the GPU and
+   that the single-rank `-pme gpu`/`-npme` behavior is unchanged. If the new
+   version rejects or changes an option, record the exact fatal message and
+   update the case or documented scope.
+5. Re-baseline the CPU/HIP tolerance only with measured values and a written
+   rationale. Keep the old profile/evidence until the new run passes.
+6. Update the profile module id, expected version, CHANGELOG and measured-scope
+   notes. Do not silently widen tolerances or claim support from a version
+   string alone.
+
+The bundled `.gro`, topology and `md.mdp` are intentionally minimal. If a new
+release deprecates an mdp option, `grompp` is the authority; change the case
+only with a recorded before/after result.
 
 ## Observed harness pitfalls
 

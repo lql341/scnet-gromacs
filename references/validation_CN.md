@@ -32,9 +32,11 @@ HIP 模式记录设备可见性、`GMX_GPU`、HIP runtime 和目标架构。可�
 
 ## OpenAPI 执行路径
 
-`scripts/run_openapi.py` 是默认编排路径。它调用已安装的 `scnet-hpc` CLI 的
-`--backend openapi`，完成远端 mkdir、upload、submit、限时 wait、详细 job 检查和
-显式 artifact 下载；不使用 SSH，并拒绝复用已存在的远端 run root 或本地下载目录。
+`contrib/run_openapi.py` 是核心计算节点脚本之上的可选编排。它调用已安装的
+`scnet-hpc` CLI 的 `--backend openapi`，完成远端 mkdir、upload、submit、限时
+wait、详细 job 检查和显式 artifact 下载；不使用 SSH，并拒绝复用已存在的远端
+run root 或本地下载目录。也可以不用该包装脚本，直接用 `scnet-hpc` 驱动同一组
+脚本。
 
 runner 读取从 `clusters/_template.conf` 复制的私有 profile，或接受显式的队列/
 module/资源参数。profile 中的 `GPU_ARCH` 会传给 HIP 作业作为可选架构门禁，但不
@@ -57,6 +59,27 @@ PP/PME 是否真正在设备上执行，仍由目标节点探针和日志决定�
 默认 `Potential` 和 `Kinetic En.` 的 `atol=0.05 kJ/mol`，`Temperature` 的
 `atol=0.5 K`，`rtol=1e-3`。这些只是 smoke 级契约；通过不表示逐位相同，
 也不能外推到更大体系、更长轨迹、其他精度或其他架构。
+
+## 适配新的 GROMACS 版本
+
+新 module 应视为一个新的目标，而不是无条件替换：
+
+1. 在计算节点探针，记录 `gmx_mpi --version`、编译器、MPI、HIP/DTK、rocFFT、
+   GPU 支持和架构。
+2. 在私有 profile 中设置 `GROMACS_EXPECT_VERSION`。实际加载的二进制版本不一致
+   时，smoke 作业会写出 `status=failed_version` 并以非零状态退出。
+3. 重跑 Argon CPU 和 HIP。检查完成标记、GPU 选择、有限能量以及调度器/workload
+   状态。日志标记变化时，依据实测证据更新检查器，不要猜测。
+4. 重跑 PME case。确认 PME 仍在 GPU 上执行，并确认单 rank 下 `-pme gpu`/
+   `-npme` 行为没有变化。若新版本拒绝或改变参数，记录完整 fatal 信息并更新
+   case 或已记录的边界。
+5. 只有拿到实测值并写明理由后才重新设定 CPU/HIP 容差；新版本通过前保留旧
+   profile/证据。
+6. 更新 profile 的 module、期望版本、CHANGELOG 和实测范围说明。不要静默放宽
+   容差，也不要仅凭版本字符串宣称支持。
+
+bundled `.gro`、topology 和 `md.mdp` 刻意保持最小。若新版本废弃某个 mdp 选项，
+以 `grompp` 为准；只有记录 before/after 结果后才修改 case。
 
 ## 已实测的 harness 陷阱
 

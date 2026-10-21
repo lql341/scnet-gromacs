@@ -8,10 +8,10 @@ layer. Use SSH only for separate, bounded diagnosis when OpenAPI cannot expose
 the needed fact.
 
 Examples:
-    python3 scripts/run_openapi.py --cluster kseshell \
+    python3 contrib/run_openapi.py --cluster kseshell \
       --run-root /absolute/new/run-root --case argon8 --mode both
 
-    python3 scripts/run_openapi.py --cluster kseshell \
+    python3 contrib/run_openapi.py --cluster kseshell \
       --run-root /absolute/new/run-root --case ionpair_pme --mode both
 """
 
@@ -72,6 +72,7 @@ def find_scnet_hpc(explicit):
         candidates.append(Path(env_root).expanduser())
     candidates.extend(
         [
+            repo_root().parent / "scnet-hpc",
             Path.home() / ".codex" / "skills" / "scnet-hpc",
             Path.home() / ".claude" / "skills" / "scnet-hpc",
         ]
@@ -195,7 +196,14 @@ def upload_tree(scnet, local_scripts, local_case, remote_scripts, remote_case):
 
 
 def build_command(
-    case, mode, run_root, remote_scripts, remote_case, module, gpu_arch
+    case,
+    mode,
+    run_root,
+    remote_scripts,
+    remote_case,
+    module,
+    gpu_arch,
+    expect_version,
 ):
     env = {
         "GROMACS_RUN_ROOT": str(run_root / "results-{}".format(case)),
@@ -203,6 +211,8 @@ def build_command(
         "GROMACS_BINARY": "gmx_mpi",
         "GROMACS_GPU_MODE": mode,
     }
+    if expect_version:
+        env["GROMACS_EXPECT_VERSION"] = expect_version
     case_info = CASES[case]
     if mode == "hip" and gpu_arch:
         env["GROMACS_EXPECT_GPU_ARCH"] = gpu_arch
@@ -234,12 +244,20 @@ def submit_mode(
     queue,
     module,
     gpu_arch,
+    expect_version,
     cpus,
     dcus,
     walltime,
 ):
     command = build_command(
-        case, mode, run_root, remote_scripts, remote_case, module, gpu_arch
+        case,
+        mode,
+        run_root,
+        remote_scripts,
+        remote_case,
+        module,
+        gpu_arch,
+        expect_version,
     )
     args = [
         "submit",
@@ -414,6 +432,7 @@ def main(argv=None):
         cpu_module = args.cpu_module or profile.get("GROMACS_MODULE")
         hip_module = args.hip_module or profile.get("GROMACS_GPU_MODULE")
         gpu_arch = profile.get("GPU_ARCH")
+        expect_version = profile.get("GROMACS_EXPECT_VERSION")
         try:
             cpus = args.cpus or int(profile.get("CPUS_PER_JOB", "2"))
             dcus = args.dcus or int(profile.get("DCUS_PER_JOB", "1"))
@@ -475,6 +494,7 @@ def main(argv=None):
                     queue,
                     module,
                     gpu_arch,
+                    expect_version,
                     cpus,
                     dcus,
                     walltime,

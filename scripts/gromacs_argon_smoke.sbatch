@@ -15,6 +15,7 @@ binary="${GROMACS_BINARY:-gmx_mpi}"
 mode="${GROMACS_GPU_MODE:-cpu}"
 gpu_pme="${GROMACS_GPU_PME:-0}"
 gpu_arch="${GROMACS_EXPECT_GPU_ARCH:-}"
+expect_version="${GROMACS_EXPECT_VERSION:-}"
 case_root="${GROMACS_CASE_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/cases/argon8}"
 gro="${GROMACS_CASE_GRO:-argon.gro}"
 deffnm="${GROMACS_DEFFNM:-argon}"
@@ -33,10 +34,19 @@ esac
 
 module purge
 module load "$module_name"
-printf 'host=%s\nmodule=%s\nbinary=%s\nmode=%s\npme_gpu=%s\ngpu_arch=%s\ncase=%s\n' \
-    "$(hostname)" "$module_name" "$binary" "$mode" "$gpu_pme" "$gpu_arch" "$gro" \
-    | tee "$run/result.txt"
 "$binary" --version >"$run/version.txt" 2>&1
+actual_version=$(awk '/^GROMACS version:/ {print $3; exit}' "$run/version.txt")
+if [ -n "$expect_version" ] && [ "$actual_version" != "$expect_version" ]; then
+    printf 'host=%s\nmodule=%s\nmode=%s\ngromacs_version=%s\ngromacs_expect=%s\nstatus=failed_version\n' \
+        "$(hostname)" "$module_name" "$mode" "${actual_version:-unknown}" \
+        "$expect_version" >"$run/result.txt"
+    echo "expected GROMACS version $expect_version, got ${actual_version:-unknown}" >&2
+    exit 3
+fi
+printf 'host=%s\nmodule=%s\nbinary=%s\nmode=%s\npme_gpu=%s\ngpu_arch=%s\ngromacs_version=%s\ngromacs_expect=%s\ncase=%s\n' \
+    "$(hostname)" "$module_name" "$binary" "$mode" "$gpu_pme" "$gpu_arch" \
+    "$actual_version" "$expect_version" "$gro" \
+    | tee "$run/result.txt"
 gmx="$binary"
 
 cd "$run"
