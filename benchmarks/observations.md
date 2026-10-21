@@ -58,9 +58,12 @@ On the same 71,844-atom case, 4 ranks across 2 nodes, 200 steps:
 | UCX, working HCA (`mlx5_0:1`) | 41.3 ns/day, pass |
 | UCX, default HCA selection | failed before mdrun (`ibv_create_ah`, invalid argument) |
 | OB1/TCP fallback | 32.0 ns/day, pass |
+| PMPI 2026.4, OB1 + `ib0` interface selection, 2 nodes/4 ranks/4 GPUs | 21.4 ns/day, pass |
 
 OB1 is a fallback, not the best default on this fabric. Keep the HCA/transport
-choice site-configurable; do not hardcode OB1.
+choice site-configurable; do not hardcode OB1. PMPI multi-node also needs a
+hostfile and explicit `ib0` TCP/OOB interface selection; without it the platform
+MPI tries the management network and hangs.
 
 ## ROCm-enabled UCX/OpenMPI experiment
 

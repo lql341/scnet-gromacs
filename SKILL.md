@@ -18,6 +18,8 @@ SCNet. Read [references/validation.md](references/validation.md) first.
 - Use SSH only when OpenAPI cannot expose a needed fact, and then only for
   bounded diagnosis.
 - Use a unique run directory and preserve all prior results.
+- Compute nodes are Linux. The local agent may be Windows, macOS or Linux;
+  keep remote paths POSIX and use `python3 scripts/validate.py` for local checks.
 - Treat module names as hints; load and inspect `gmx_mpi --version` on the target node.
 - Keep CPU as the numerical oracle and treat GPU as a separate backend/runtime check.
 - Use `cases/argon8` for the no-charge CPU/HIP smoke and `cases/ionpair_pme`
@@ -43,8 +45,9 @@ existing remote run roots.
 Do not assume the maintainer's module or prefix. A blank SCNet account may use a
 site module, a private module path, or a user-owned binary plus environment
 script. `GROMACS_MODULE` may be empty; set `GROMACS_BINARY` and optionally
-`GROMACS_ENV_SCRIPT`. Coverage in `references/version-coverage.md` is reference
-evidence, not a bundled GROMACS distribution.
+`GROMACS_ENV_SCRIPT`. Reference modules are user-level only; system-wide
+publication is out of scope. Coverage in `references/version-coverage.md` is
+reference evidence, not a bundled GROMACS distribution.
 
 For multi-node work set `NODES`, `MPI_RANKS` and `MPI_RANKS_PER_NODE`. On the
 reference OpenMPI 5 build, `srun` needs `SLURM_MPI_TYPE=pmix`; the allocation must

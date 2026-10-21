@@ -22,7 +22,7 @@ import shlex
 import subprocess
 import sys
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 CASES = {
     "argon8": {
@@ -66,6 +66,14 @@ class RunnerError(Exception):
 
 def repo_root():
     return Path(__file__).resolve().parent.parent
+
+
+def remote_root(value):
+    """Return a POSIX remote path even when the local agent is Windows."""
+    text = str(value).replace("\\", "/")
+    if not text.startswith("/"):
+        raise RunnerError("--run-root must be an absolute POSIX remote path")
+    return PurePosixPath(text)
 
 
 def find_scnet_hpc(explicit):
@@ -601,7 +609,7 @@ def main(argv=None):
 
         cli = find_scnet_hpc(args.scnet_hpc)
         scnet = Scnet(cli, args.cluster, profile.get("OPENAPI_REGION_ID"))
-        run_root = args.run_root.expanduser()
+        run_root = remote_root(args.run_root.expanduser())
 
         download_dir = args.download_dir
         if download_dir is None:

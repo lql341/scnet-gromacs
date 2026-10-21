@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.7.0
+Current release: 0.8.0
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -52,12 +52,13 @@ reference environment; it is not a guarantee for every account or cluster.
 | GROMACS | CPU | HIP | PME | multi-rank PME | multi-GPU | multi-node | PMPI |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026.3 | yes | yes | yes | yes | yes | yes | yes |
-| 2026.4 | yes | yes | yes | yes | yes | yes | yes (single-node) |
+| 2026.4 | yes | yes | yes | yes | yes | yes | yes |
 
 The 2026.4 reference builds came from the official 2026.4 source and were
-exercised through reference modules. The 2026.4 PMPI variant was validated
-single-node; PMPI multi-node was not tested. The modules are not bundled; a blank
-account must build or obtain its own. See
+exercised through user-level reference modules. The 2026.4 PMPI variant was
+validated single-node and on two nodes/four ranks/four GPUs. These are user-level
+modules only; system-wide publication is out of scope, and a blank account must
+build or obtain its own. See
 [references/version-coverage.md](references/version-coverage.md) for the basis,
 multi-node/UCX findings and the minimum evidence needed for a new account.
 
@@ -293,11 +294,22 @@ runtime/device checks from correctness, preserve finite/invariant checks, and
 return nonzero workload and scheduler statuses on failures. Do not transfer
 CUDA, ROCm or newer-GPU claims to DTK without a target probe.
 
-## Local validation
+## Local validation and host platforms
 
-```bash
-bash scripts/validate.sh
-```
+SCNet compute nodes are Linux; every submitted job runs Linux bash. The local
+agent may be Windows, macOS or Linux:
+
+- `contrib/run_openapi.py` and `scripts/compare_gromacs_energy.py` use Python
+  3.8+ and are cross-platform.
+- Remote paths are always POSIX. `--run-root` is normalized to POSIX even when
+  the local shell is Windows; do not pass a Windows drive path as a remote path.
+- The cross-platform validator is:
+  ```bash
+  python3 scripts/validate.py
+  ```
+- `bash scripts/validate.sh` is a thin wrapper. On Windows, use Git Bash or WSL
+  if you want the optional `bash -n` syntax check; without bash, the Python
+  validator skips that check and still validates the repository.
 
 This checks scripts and bundled inputs only; it never compiles or runs GROMACS
 locally.

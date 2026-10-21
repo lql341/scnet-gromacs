@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.7.0
+当前版本：0.8.0
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -44,11 +44,12 @@ bundled case 只是 smoke test。它们覆盖部分 PME 分解、GPU-aware MPI �
 | GROMACS | CPU | HIP | PME | 多 rank PME | 多 GPU | 多节点 | PMPI |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026.3 | 是 | 是 | 是 | 是 | 是 | 是 | 是 |
-| 2026.4 | 是 | 是 | 是 | 是 | 是 | 是 | 是（单节点） |
+| 2026.4 | 是 | 是 | 是 | 是 | 是 | 是 | 是 |
 
-2026.4 参考构建来自官方源码，通过参考 module 验证；2026.4 PMPI 变体只验证了
-单节点，PMPI 多节点未测试。仓库不打包它们，空白账户必须自行构建或获取。
-依据、多节点/UCX 发现和新账户最低证据要求见
+2026.4 参考构建来自官方源码，通过用户级参考 module 验证；2026.4 PMPI 变体
+已验证单节点和双节点/4 rank/4 GPU。它们只是用户级 module，不做系统级发布；
+仓库不打包它们，空白账户必须自行构建或获取。依据、多节点/UCX 发现和新账户
+最低证据要求见
 [references/version-coverage.md](references/version-coverage.md)。
 
 用户自有构建可以不使用 module：
@@ -131,6 +132,15 @@ MPI_LAUNCHER_ARGS="--mca pml ob1 --mca btl self,vader,tcp"
 
 `MPI_LAUNCHER_ARGS` 用于启动器命令行参数，`MPI_ENV_*` 用于环境变量。OB1 是
 fallback，不是默认。
+
+PMPI 多节点还需要 hostfile 和显式 `ib0` 接口选择，否则平台 MPI 会走管理网：
+
+```text
+mpirun --hostfile hostfile --map-by ppr:2:node --bind-to none   --mca pml ob1 --mca btl self,vader,tcp   --mca btl_tcp_if_include ib0 --mca oob_tcp_if_include ib0 -np 4 ...
+```
+
+参考 71,844 原子 Lysozyme，PMPI/OB1 多节点 21.4 ns/day，OpenMPI 5 UCX 路径
+41.3 ns/day。PMPI 可用，但不是最快的多节点路径。
 
 这些是站点观察，不是通用 launcher 结论。
 
@@ -260,11 +270,22 @@ GROMACS 是成熟应用验证，不是从零编写新 kernel 的移植。仍应�
 运行时检查和正确性检查分开，检查有限值和物理不变量，并让 workload 与调度器都
 传播失败状态。没有目标探针时，不要把 CUDA、ROCm 或新 GPU 的能力外推到 DTK。
 
-## 本地校验
+## 本地校验与宿主系统
 
-```bash
-bash scripts/validate.sh
-```
+SCNet 计算节点是 Linux；所有提交的作业都运行 Linux bash。本地智能体可以是
+Windows、macOS 或 Linux：
+
+- `contrib/run_openapi.py` 和 `scripts/compare_gromacs_energy.py` 使用 Python
+  3.8+，跨平台。
+- 远端路径始终是 POSIX。`--run-root` 即使从 Windows 本地 shell 传入也会
+  规范化为 POSIX；不要把 Windows 盘符路径当作远端路径。
+- 跨平台校验命令：
+  ```bash
+  python3 scripts/validate.py
+  ```
+- `bash scripts/validate.sh` 是薄包装。Windows 上如需可选的 `bash -n` 语法
+  检查，请使用 Git Bash 或 WSL；没有 bash 时，Python 校验器会跳过该检查，
+  仍然校验仓库文件。
 
 只检查脚本和 bundled 输入，不在本机编译或运行 GROMACS。
 

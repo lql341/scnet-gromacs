@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.0 (2026-10-21)
+
+- Keep the 2026.4 reference modules user-level only; system-wide publication is
+  explicitly out of scope.
+- Make local orchestration cross-platform: POSIX remote paths from Windows,
+  macOS or Linux; add a Python validator that works without a local bash.
+- Validate PMPI 2026.4 multi-node on two nodes/four ranks/four GPUs with
+  hostfile, OB1 and explicit `ib0` interface selection.
+- Add launcher-argument support and document the PMPI multi-node transport
+  contract; keep OB1 a configurable fallback, not a hardcoded default.
+- Update version coverage, validation notes and benchmark observations.
+
 ## 0.7.0 (2026-10-21)
 
 - Add formal 2026.4 PMPI reference module coverage and single-node validation

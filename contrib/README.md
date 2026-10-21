@@ -21,6 +21,10 @@ It is deliberately outside `scripts/` so the core compute-node path stays small
 and stable. If `scnet-hpc` changes its CLI, update this wrapper only; the
 compute-node scripts and their evidence contract do not change.
 
+The wrapper is Python 3.8+ standard library and runs on Windows, macOS or Linux.
+Remote paths are POSIX; `--run-root` is normalized to POSIX even from a Windows
+local shell. SCNet compute jobs themselves always run Linux bash.
+
 The wrapper looks for `scnet-hpc` in the sibling `../scnet-hpc` directory first,
 then in `SCNET_HPC_ROOT`, `~/.codex/skills/scnet-hpc` and
 `~/.claude/skills/scnet-hpc`. Pass `--scnet-hpc` to override the lookup.

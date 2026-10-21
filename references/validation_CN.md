@@ -49,10 +49,10 @@ PP/PME 是否真正在设备上执行，仍由目标节点探针和日志决定�
 `--mode both` 会提交 CPU 和 HIP，下载两套结果并运行容差检查；调度器状态、平台
 退出码和 workload `status=passed` 仍分别检查。
 
-2026.4 PMPI 参考 module 的单节点验证覆盖单 rank CPU/HIP、双 rank CPU PME 和
-双 GPU PME，使用 `mpirun` 加 OB1 启动器参数；PMPI 多节点未测试。更大规模的
-134,177 原子 ADH 参考运行记录在性能观察中，扩展性好于微 case 但仍为次线性，
-不是生产 benchmark。
+2026.4 PMPI 参考 module 验证覆盖单 rank CPU/HIP、双 rank CPU PME、双 GPU PME
+和双节点/4 rank/4 GPU，使用 `mpirun` 加 OB1 启动器参数。PMPI 多节点还需要
+hostfile 和显式 `ib0` TCP/OOB 接口选择。更大规模的 134,177 原子 ADH 参考运行
+记录在性能观察中，扩展性好于微 case 但仍为次线性，不是生产 benchmark。
 
 ## 空白账户基线
 
@@ -61,6 +61,11 @@ PP/PME 是否真正在设备上执行，仍由目标节点探针和日志决定�
 `GROMACS_ENV_SCRIPT` 提供站点 module 或自有构建。探针和版本门禁先于任何能力
 声明。[version-coverage.md](version-coverage.md) 中的覆盖是参考环境证据，不是
 仓库自带的依赖。
+
+SCNet 计算节点是 Linux；本地智能体可以是 Windows、macOS 或 Linux。远端路径
+必须保持 POSIX，即使本地 shell 是 Windows。Python 编排/比较脚本跨平台；本地
+检查使用 `python3 scripts/validate.py`。`bash -n` 语法检查是可选的，需要
+bash（Windows 上可用 Git Bash/WSL）。
 
 ## CPU/HIP 容差契约
 

@@ -57,9 +57,10 @@ is a site hint, not live evidence.
 tolerance checker. The scheduler state, platform exit status and workload
 `status=passed` are still checked separately.
 
-For the 2026.4 PMPI reference module, single-node validation covered single-rank
-CPU/HIP, two-rank CPU PME and two-GPU PME with `mpirun` plus OB1 launcher
-arguments. PMPI multi-node was not tested. A larger 134,177-atom ADH reference
+For the 2026.4 PMPI reference module, validation covered single-rank CPU/HIP,
+two-rank CPU PME, two-GPU PME and two-node/four-rank/four-GPU execution with
+`mpirun` plus OB1 launcher arguments. PMPI multi-node also needed a hostfile and
+explicit `ib0` TCP/OOB interface selection. A larger 134,177-atom ADH reference
 run is recorded in the performance observations; it scales better than the tiny
 cases but remains sublinear and is not a production benchmark.
 
@@ -71,6 +72,12 @@ account must provide a site module or a user-owned build through
 `GROMACS_ENV_SCRIPT`. The probe and version gate run before any capability claim.
 Coverage declared in [version-coverage.md](version-coverage.md) is evidence from
 the reference environment, not a bundled dependency.
+
+SCNet compute nodes are Linux. The local agent may be Windows, macOS or Linux.
+Keep remote paths POSIX, even when the local shell is Windows. The Python
+orchestration/comparison scripts are cross-platform; use `python3 scripts/validate.py`
+for local checks. `bash -n` syntax checking is optional and requires bash
+(Git Bash/WSL on Windows).
 
 ## CPU/HIP tolerance contract
 
@@ -141,7 +148,11 @@ Observed on Kunshan:
 - the PMPI module's platform OpenMPI 4.1.5 is not Slurm-PMI enabled. Its
   multi-rank path needed `mpirun` plus an MPI transport override. The reliable
   form was launcher arguments (`--mca pml ob1 --mca btl self,vader,tcp`), not
-  only an environment variable;
+  only an environment variable. Cross-node PMPI also needed a hostfile and
+  `--mca btl_tcp_if_include ib0 --mca oob_tcp_if_include ib0`; otherwise it
+  tried the management network and hung. PMPI/OB1 multi-node measured 21.4
+  ns/day versus 41.3 ns/day for the OpenMPI 5 UCX path on the same 200-step
+  Lysozyme run;
 - forced GPU-aware MPI completed on the two-rank/two-GPU micro-case, but that is
   not evidence of GPU-aware performance or correctness at scale. On a short
   71,844-atom Lysozyme run, forced GPU-aware MPI was much slower than the default
@@ -212,4 +223,5 @@ Apply the generic DCU principles even when validating a mature application:
 - visible test registration and nonzero failure propagation;
 - scheduler state plus workload exit status;
 - record untested boundaries (larger multi-node scaling, production-size
-  systems, precision drift, other fabrics and account baselines).
+  systems, precision drift, other fabrics and account baselines, GPU-aware
+  production performance).
