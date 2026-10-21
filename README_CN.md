@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.8.0
+当前版本：0.8.1
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -244,7 +244,8 @@ benchmark。
 但 direct 路径远慢于 host-staged：双节点/4 GPU Lysozyme 约 1.7 ns/day，
 单节点/4 GPU 约 0.97 ns/day，而 host-staged 为 43.5/43.1 ns/day。限制
 `UCX_TLS=rocm_ipc,sm,self,tcp` 后达到 18.1 ns/day，仍低于 host-staged。
-该 DTK/HIP/mlx5 路径还需要更多 UCX 调优，默认保持关闭。
+更大的 134k 原子 ADH 也只有 0.57 ns/day（host-staged 28.7），约慢 50 倍，
+所以这不只是小体系问题。该 DTK/HIP/mlx5 路径还需要更多 UCX 调优，默认保持关闭。
 
 检查器依赖当前 smoke 脚本写出的 `inputs.sha256`；旧版脚本的历史 run 没有该文件。
 

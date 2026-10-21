@@ -162,8 +162,10 @@ Observed on Kunshan:
   `MPI (GPU-aware: HIP)` and used direct GPU communication, but performance was
   far below host-staged (about 1.7 ns/day cross-node and 0.97 ns/day single-node,
   versus 43.5/43.1 ns/day). A restricted `UCX_TLS=rocm_ipc,sm,self,tcp` run
-  reached 18.1 ns/day, still below host staging. Keep GPU-aware MPI off by
-  default until the ROCm/UCX/mlx5 path is tuned.
+  reached 18.1 ns/day, still below host staging. The larger 134,177-atom ADH
+  case was also about 50x slower with GPU-aware communication (0.57 versus 28.7
+  ns/day), so the problem is not only small system size. Keep GPU-aware MPI off
+  by default until the ROCm/UCX/mlx5 path is tuned.
 - on this reference cluster, multi-node OpenMPI 5 needed `srun` with
   `SLURM_MPI_TYPE=pmix`, and the allocation had to be balanced with
   `#SBATCH --ntasks-per-node=...`. Without balance, ranks concentrated on one

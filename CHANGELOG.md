@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1 (2026-10-21)
+
+- Record the larger 134,177-atom ADH GPU-aware result: direct communication was
+  about 50x slower than host staging, so the GPU-aware limitation is not only a
+  small-system effect.
+
 ## 0.8.0 (2026-10-21)
 
 - Keep the 2026.4 reference modules user-level only; system-wide publication is

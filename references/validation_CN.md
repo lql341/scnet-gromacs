@@ -134,7 +134,9 @@ GPU 数量。这些事实不能从申请的分配资源推断。
   `MPI (GPU-aware: HIP)` 并使用 direct GPU communication，但性能远低于
   host-staged（跨节点约 1.7 ns/day，单节点约 0.97 ns/day，而 host-staged
   为 43.5/43.1 ns/day）。限制 `UCX_TLS=rocm_ipc,sm,self,tcp` 后达到
-  18.1 ns/day，仍低于 host-staged。该路径调优前默认关闭 GPU-aware MPI。
+  18.1 ns/day，仍低于 host-staged。更大的 134,177 原子 ADH 也只有
+  0.57 ns/day（host-staged 28.7），约慢 50 倍，所以不只是小体系问题。该路径
+  调优前默认关闭 GPU-aware MPI。
 - 在该参考集群，多节点 OpenMPI 5 需要 `srun` 加
   `SLURM_MPI_TYPE=pmix`，并且分配必须用 `#SBATCH --ntasks-per-node=...` 平衡。
   不平衡时 rank 会集中到一个节点，GROMACS GPU 任务分配失败。

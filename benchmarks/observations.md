@@ -76,10 +76,14 @@ A ROCm-enabled UCX/OpenMPI build was tested with the 2026.4 Lysozyme case:
 | 1 node/4 GPUs, host-staged | 43.1 ns/day |
 | 1 node/4 GPUs, GPU-aware, default UCX TLS | 0.97 ns/day |
 | 1 node/4 GPUs, GPU-aware, `UCX_TLS=rocm_ipc,sm,self,tcp` | 18.1 ns/day |
+| ADH 134k, 1 node/4 GPUs, host-staged | 28.7 ns/day |
+| ADH 134k, 1 node/4 GPUs, GPU-aware default TLS | 0.57 ns/day |
 
 GROMACS detected GPU-aware MPI and used direct GPU communication, but the
-direct path was far slower than host staging. The experiment proves the build
-can expose GPU-aware MPI; it does not justify enabling it. Keep it off by default
+direct path was far slower than host staging. The larger 134k-atom ADH case was
+also about 50x slower with GPU-aware communication (0.57 versus 28.7 ns/day), so
+the problem is not only the tiny system size. The experiment proves the build can
+expose GPU-aware MPI; it does not justify enabling it. Keep it off by default
 until the site's ROCm/UCX/mlx5 path is tuned.
 
 Interpretation:

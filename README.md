@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.8.0
+Current release: 0.8.1
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -259,8 +259,10 @@ but the direct path was much slower than host-staged communication: about
 1.7 ns/day for the two-node/four-GPU Lysozyme run and 0.97 ns/day for the
 single-node/four-GPU run, versus 43.5/43.1 ns/day host-staged. A restricted
 `UCX_TLS=rocm_ipc,sm,self,tcp` run reached 18.1 ns/day, still below host-staged.
-The site's DTK/HIP/mlx5 path needs more UCX tuning before GPU-aware MPI is
-useful; keep it disabled by default.
+The larger 134k-atom ADH case was also about 50x slower with GPU-aware
+communication (0.57 versus 28.7 ns/day), so this is not only a small-system
+effect. The site's DTK/HIP/mlx5 path needs more UCX tuning before GPU-aware MPI
+is useful; keep it disabled by default.
 
 The checker needs the `inputs.sha256` file written by the current smoke script.
 Runs from older script versions do not contain it.
