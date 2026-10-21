@@ -14,15 +14,38 @@ a rebuild.
 
 ## Case contract
 
-The bundled Argon case fixes atom count, box, timestep and step count. The CPU
-run is the oracle. Record the exact `gmx_mpi --version`, command line, resource
-tuple, scheduler state, exit code, energy summary and final checksum.
+There are two bundled cases:
+
+- `cases/argon8` is the deterministic no-charge CPU/HIP smoke. It fixes atom
+  count, box, timestep and step count and uses `-nb gpu` in HIP mode.
+- `cases/ionpair_pme` is a net-neutral eight-ion PME case. It uses
+  `coulombtype = PME`, `-nb gpu -pme gpu` in HIP mode, and exists only to
+  exercise the PME GPU path. It is not a performance or production-accuracy
+  case.
+
+The CPU run is the oracle. Record the exact `gmx_mpi --version`, command line,
+resource tuple, scheduler state, exit code, input checksums, energy summary and
+final checksum.
 
 For HIP mode, record visible devices, `GMX_GPU`, HIP runtime and target
-architecture. The bundled no-charge Argon case uses `-nb gpu`; forcing
-`-pme gpu` on a system without PME electrostatics is a real GROMACS input
-error. Add `-pme gpu -npme 1` only to a PME-enabled case. Do not claim
-performance from a tiny case.
+architecture. For the PME case, require the explicit log line
+`PME tasks will do all aspects on the GPU`; a generic GPU/HIP mention is not
+enough.
+
+## CPU/HIP tolerance contract
+
+Compare the two energy time series with
+`scripts/compare_gromacs_energy.py`. Both runs must have `status=passed`, the
+same `inputs.sha256` content and the same time grid. Apply per data point:
+
+```text
+|CPU - HIP| <= atol + rtol * max(|CPU|, |HIP|)
+```
+
+Defaults are `atol=0.05 kJ/mol` for `Potential` and `Kinetic En.`,
+`atol=0.5 K` for `Temperature`, and `rtol=1e-3`. These values are a smoke-level
+contract. A pass is not a bitwise-equality claim and does not extend to larger
+systems, longer trajectories, other precisions or other architectures.
 
 ## Observed harness pitfalls
 
@@ -35,6 +58,15 @@ performance from a tiny case.
   keep the `.gro` and topology names consistent.
 - An MPI build rejects thread-MPI-only `-ntmpi` arguments. Use the MPI
   launcher/resource contract and `-ntomp` for this smoke.
+- On a single MPI rank, `-pme gpu -npme 1` is a fatal request for a parallel
+  simulation. Use `-pme gpu` without `-npme`; add `-npme` only when the job has
+  multiple MPI ranks. The PME log line then distinguishes PP and PME GPU tasks.
+- The installed HIP build can print a non-fatal `dummy_kernel` launch-bounds
+  warning before mdrun. Judge success from the explicit device/PME selection,
+  completion marker, finite energy values and `status=passed`, not from the
+  absence of warnings.
+- The CPU/HIP comparison is a tolerance check over a 21-frame, 20-step run.
+  Do not turn a pass into a production accuracy or performance claim.
 
 The measured Kunshan module observation is GROMACS 2026.3 with GCC 16.2,
 OpenMPI 5.0.11, HIP/DTK 26.04, rocFFT 1.0.28 and gfx906. The upstream current

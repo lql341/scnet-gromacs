@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 (2026-10-21)
+
+- Add a PME-enabled ion-pair case and a `-nb gpu -pme gpu` HIP path that
+  requires the explicit `PME tasks will do all aspects on the GPU` log line.
+- Add a CPU/HIP energy-tolerance checker with input provenance checks, time-grid
+  validation and documented absolute-plus-relative tolerances.
+- Record input checksums and support a configurable case coordinate file and
+  output prefix.
+- Document that `-npme` must be omitted for a single MPI rank and that the tiny
+  smoke cases do not establish production accuracy or performance.
+
 ## 0.1.1 (2026-10-20)
 
 - Make the Argon smoke checker compatible with GROMACS 2026.3 output and

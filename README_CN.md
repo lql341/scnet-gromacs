@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.1.1
+当前版本：0.2.0
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -21,13 +21,18 @@ case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检
 - module 身份和 `gmx_mpi --version`；
 - 编译器、MPI、HIP/DTK、GPU FFT 和目标架构信息；
 - bundled 八原子 Argon case 的 CPU `grompp + mdrun`；
-- 可选 HIP/DCU `mdrun`；bundled 无电荷 case 显式使用 `-nb gpu`，只有体系
-  实际启用 PME 时才增加 PME GPU 参数；
-- 有限能量输出和紧凑的最终状态 checksum；
+- 可选 HIP/DCU `mdrun`；bundled 无电荷 Argon case 显式使用 `-nb gpu`；
+- 独立的 PME 离子对 case，使用 `-nb gpu -pme gpu`，检查 PME GPU 日志，
+  不给 Argon case 强行添加 PME 参数；
+- 有限能量输出、紧凑的最终状态 checksum 和输入 checksum；
+- 明确的 CPU/HIP 能量容差比较；
 - 调度器终态和 workload 退出码。
 
 CPU 运行是数值 oracle。GPU 运行只证明集成和运行时，不宣称逐位相同或生产性能。
 浮点差异必须结合容差和物理合理性报告。
+
+bundled case 只是 smoke test，不能证明多节点扩展、PME 分解、GPU-aware MPI、
+PMPI 变体或生产规模精度。
 
 ## 工作流
 
@@ -44,16 +49,57 @@ bash scripts/validate.sh
 GROMACS_MODULE     module 名称，默认 gromacs/2026.3
 GROMACS_BINARY     可执行文件，默认 gmx_mpi
 GROMACS_GPU_MODE   cpu 或 hip，默认 cpu
+GROMACS_GPU_PME    设为 1 时增加 -pme gpu，默认 0；仅用于 PME case
+GROMACS_NPME       可选 -npme 值；仅用于真正的多 rank 作业
+GROMACS_CASE_ROOT  case 目录，默认 <repo>/cases/argon8
+GROMACS_CASE_GRO   输入坐标文件，默认 argon.gro
+GROMACS_DEFFNM     输出前缀，默认 argon
 GROMACS_RUN_ROOT   唯一可写运行目录
 ```
 
 不能只根据 module 名称判断 GPU 可用；必须在计算节点确认设备可见，并确认二进制
-报告 HIP 支持。
+报告 HIP 支持。PME case 需要把 `GROMACS_CASE_ROOT` 设为
+`cases/ionpair_pme`，并设置 `GROMACS_CASE_GRO=ionpair.gro`、
+`GROMACS_DEFFNM=ionpair`、`GROMACS_GPU_PME=1`。
+
+单 MPI rank 使用 `-pme gpu` 时不要加 `-npme`。已安装的 GROMACS 在只请求
+一个 rank 时会拒绝 `-npme`；只有真正的多 rank 作业才设置 `GROMACS_NPME`。
 
 smoke harness 检查 GROMACS 2026.x 的完成标记
 `Writing final coordinates.`（同时兼容旧版 `Finished mdrun`），按多列
-`energy.xvg` 数据检查有限数值，并记录最终 checksum。调度器显示
+`energy.xvg` 数据检查有限数值，记录输入和最终 checksum；PME 模式还要求日志
+出现 `PME tasks will do all aspects on the GPU`。调度器显示
 `COMPLETED` 还不够，workload 也必须写出 `status=passed`。
+
+## CPU/HIP 能量比较
+
+同一 case 分别运行 `cpu` 和 `hip` 模式，然后比较两个 run 目录：
+
+```bash
+python3 scripts/compare_gromacs_energy.py CPU_RUN_DIR HIP_RUN_DIR \
+  --report comparison.txt
+```
+
+检查器要求两个 run 都有 `status=passed`、输入 checksum 相同、时间网格相同，并且
+`Potential`、`Kinetic En.`、`Temperature` 都是有限数值。逐数据点应用：
+
+```text
+|CPU - HIP| <= atol + rtol * max(|CPU|, |HIP|)
+```
+
+默认能量项 `atol=0.05 kJ/mol`、温度 `atol=0.5 K`、`rtol=1e-3`。这些默认值
+是 smoke 级契约，不是生产精度规范。通过只说明这个小 case 的数值一致性，不
+宣称 CPU/GPU 轨迹逐位相同。
+
+检查器依赖当前 smoke 脚本写出的 `inputs.sha256`；旧版脚本的历史 run 没有该文件。
+
+## 昆山实测范围
+
+已安装的昆山 module 在 gfx906 上实测：GROMACS 2026.3、GCC 16.2、
+OpenMPI 5.0.11、DTK 26.04、HIP 6.3.26113、rocFFT 1.0.28。Argon CPU/HIP
+smoke 和离子对 PME CPU/HIP smoke 都以 `status=passed` 完成，并通过容差检查。
+PME 运行选择 1 个 GPU，并报告 PME 在 GPU 上执行。这些均为单节点、单 rank、
+20 步 smoke 结果，不覆盖性能或更大体系。
 
 ## 提炼的 DCU 移植经验
 

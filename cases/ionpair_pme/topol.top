@@ -1,0 +1,20 @@
+; Minimal PME ion-pair case: four Na+ and four Cl-
+[defaults]
+1 1 no 1.0 1.0
+
+[atomtypes]
+NA 22.990 1.0 A 0.3000 0.5000
+CL 35.450 -1.0 A 0.4000 0.5000
+
+[moleculetype]
+ION 1
+
+[atoms]
+1 NA 1 ION NA 1 1.0 22.990
+2 CL 2 ION CL 1 -1.0 35.450
+
+[system]
+Four ion pairs
+
+[molecules]
+ION 4

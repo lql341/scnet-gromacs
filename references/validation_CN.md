@@ -13,14 +13,33 @@
 
 ## Case 契约
 
-Argon case 固定原子数、盒子、时间步和步数。CPU 运行是 oracle。记录完整
-`gmx_mpi --version`、命令行、资源元组、调度器终态、退出码、能量摘要和最终
-checksum。
+仓库包含两个 case：
 
-HIP 模式记录设备可见性、`GMX_GPU`、HIP runtime 和目标架构。bundled 无电荷
-Argon case 使用 `-nb gpu`；在没有 PME 静电时强制 `-pme gpu` 会被 GROMACS
-判为真实输入错误。只有 PME case 才增加 `-pme gpu -npme 1`。不要用微型
-case 宣称生产性能。
+- `cases/argon8` 是无电荷的确定性 CPU/HIP smoke，固定原子数、盒子、时间步和
+  步数；HIP 模式使用 `-nb gpu`。
+- `cases/ionpair_pme` 是净中性八离子 PME case，设置 `coulombtype = PME`，
+  HIP 模式使用 `-nb gpu -pme gpu`，只用于验证 PME GPU 路径，不代表性能或
+  生产规模精度。
+
+CPU 运行是 oracle。记录完整 `gmx_mpi --version`、命令行、资源元组、调度器
+终态、退出码、输入 checksum、能量摘要和最终 checksum。
+
+HIP 模式记录设备可见性、`GMX_GPU`、HIP runtime 和目标架构。PME case 必须
+明确出现日志行 `PME tasks will do all aspects on the GPU`；仅有泛泛的 GPU/HIP
+字样不算。
+
+## CPU/HIP 容差契约
+
+使用 `scripts/compare_gromacs_energy.py` 比较两条能量时间序列。两个 run 都必须
+有 `status=passed`、相同的 `inputs.sha256` 内容和相同时间网格。逐数据点应用：
+
+```text
+|CPU - HIP| <= atol + rtol * max(|CPU|, |HIP|)
+```
+
+默认 `Potential` 和 `Kinetic En.` 的 `atol=0.05 kJ/mol`，`Temperature` 的
+`atol=0.5 K`，`rtol=1e-3`。这些只是 smoke 级契约；通过不表示逐位相同，
+也不能外推到更大体系、更长轨迹、其他精度或其他架构。
 
 ## 已实测的 harness 陷阱
 
@@ -32,6 +51,13 @@ case 宣称生产性能。
   变成 fatal。
 - MPI 构建不接受 thread-MPI 专用的 `-ntmpi` 参数；本 smoke 使用 MPI 资源
   契约和 `-ntomp`。
+- 单 MPI rank 使用 `-pme gpu -npme 1` 会被判为请求并行模拟并 fatal。单 rank
+  只用 `-pme gpu`，不加 `-npme`；只有多 rank 作业才加 `-npme`。PME 日志行
+  会区分 PP 和 PME GPU 任务。
+- 已安装的 HIP build 可能在 mdrun 前打印非致命的 `dummy_kernel` launch-bounds
+  警告。成功判定应依据明确的设备/PME 选择、完成标记、有限能量值和
+  `status=passed`，而不是“没有 warning”。
+- CPU/HIP 比较只覆盖 21 帧、20 步的 smoke；通过不能外推为生产精度或性能。
 
 昆山实测 module 为 GROMACS 2026.3，编译器 GCC 16.2，OpenMPI 5.0.11，
 HIP/DTK 26.04，rocFFT 1.0.28，目标架构 gfx906。上游当前版本是 2026.4，

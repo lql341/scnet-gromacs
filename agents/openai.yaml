@@ -1,7 +1,7 @@
 interface:
   display_name: "SCNet GROMACS"
-  short_description: "Validate GROMACS CPU and HIP/DCU module runs on SCNet"
-  default_prompt: "Use $scnet-gromacs to check a GROMACS module and run the bundled small CPU oracle, optionally validating HIP/DCU execution on a compute node."
+  short_description: "Validate GROMACS CPU, HIP/DCU and PME GPU module runs on SCNet"
+  default_prompt: "Use $scnet-gromacs to check a GROMACS module, run the bundled small CPU oracle and optional HIP/DCU or PME GPU case, then compare CPU and HIP energies with the documented tolerance."
 
 policy:
   allow_implicit_invocation: true
