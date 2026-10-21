@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0 (2026-10-21)
+
+- Add formal 2026.4 PMPI reference module coverage and single-node validation
+  (single-rank CPU/HIP, two-rank CPU PME, two-GPU PME).
+- Add launcher-argument support and document the PMPI OB1 fallback as a
+  site-configurable transport, not a default.
+- Expand the reference benchmark to the 134,177-atom ADH system across 1/2/4
+  GPUs and two nodes/four GPUs.
+- Build a ROCm-enabled UCX/OpenMPI variant. GPU-aware MPI is detected but much
+  slower than host staging on this fabric; keep it disabled by default.
+- Update version coverage, blank-account guidance and multi-node/transport notes.
+
 ## 0.6.0 (2026-10-21)
 
 - Add a formal version-coverage declaration for 2026.3 and 2026.4, based on the

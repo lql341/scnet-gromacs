@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.6.0
+当前版本：0.7.0
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -44,10 +44,11 @@ bundled case 只是 smoke test。它们覆盖部分 PME 分解、GPU-aware MPI �
 | GROMACS | CPU | HIP | PME | 多 rank PME | 多 GPU | 多节点 | PMPI |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026.3 | 是 | 是 | 是 | 是 | 是 | 是 | 是 |
-| 2026.4 | 是 | 是 | 是 | 是 | 是 | 是 | 未测试 |
+| 2026.4 | 是 | 是 | 是 | 是 | 是 | 是 | 是（单节点） |
 
-2026.4 参考构建来自官方源码，通过私有 module 路径验证；它不是站点发布
-module。依据、多节点/UCX 发现和新账户最低证据要求见
+2026.4 参考构建来自官方源码，通过参考 module 验证；2026.4 PMPI 变体只验证了
+单节点，PMPI 多节点未测试。仓库不打包它们，空白账户必须自行构建或获取。
+依据、多节点/UCX 发现和新账户最低证据要求见
 [references/version-coverage.md](references/version-coverage.md)。
 
 用户自有构建可以不使用 module：
@@ -119,6 +120,17 @@ DCU。PME case 设置 `GROMACS_NPME=1` 可请求独立 PME rank。
 这些是参考站点观察，不是通用 launcher 结论。跨节点运行设置 `NODES`、
 `MPI_RANKS`、`MPI_RANKS_PER_NODE`，必要时设置 `SCHEDULER_OPTIONS`；runner 会
 平衡分配并向 `srun` 传 `--ntasks-per-node`。
+
+PMPI 参考 module 的多 rank 运行使用 `mpirun` 加 OB1 transport 覆盖，因为平台
+UCX 路径可能在 mdrun 前失败：
+
+```text
+MPI_LAUNCHER="mpirun"
+MPI_LAUNCHER_ARGS="--mca pml ob1 --mca btl self,vader,tcp"
+```
+
+`MPI_LAUNCHER_ARGS` 用于启动器命令行参数，`MPI_ENV_*` 用于环境变量。OB1 是
+fallback，不是默认。
 
 这些是站点观察，不是通用 launcher 结论。
 
@@ -212,6 +224,17 @@ smoke 记录的能量列都是有限数值。PME 运行还比较 `Coulomb (SR)`�
 可用 UCX HCA 路径 41.3 ns/day，OB1/TCP fallback 32.0 ns/day，默认 UCX HCA
 在 mdrun 前失败。OB1 是 fallback，不是默认。强制 GPU-aware MPI 明显变慢；
 没有实测不要启用。
+
+更大的 ADH benchmark，134,177 原子，200 步：1 GPU 21.1 ns/day，2 GPU 22.7，
+4 GPU 28.7，双节点/4 GPU 27.8。扩展性好于微 case，但仍为次线性；不是生产
+benchmark。
+
+还测试了启用 ROCm 的 UCX/OpenMPI 构建。GROMACS 能检测到 GPU-aware MPI
+（`MPI library: MPI (GPU-aware: HIP)`、`GPU direct communication will be used`），
+但 direct 路径远慢于 host-staged：双节点/4 GPU Lysozyme 约 1.7 ns/day，
+单节点/4 GPU 约 0.97 ns/day，而 host-staged 为 43.5/43.1 ns/day。限制
+`UCX_TLS=rocm_ipc,sm,self,tcp` 后达到 18.1 ns/day，仍低于 host-staged。
+该 DTK/HIP/mlx5 路径还需要更多 UCX 调优，默认保持关闭。
 
 检查器依赖当前 smoke 脚本写出的 `inputs.sha256`；旧版脚本的历史 run 没有该文件。
 

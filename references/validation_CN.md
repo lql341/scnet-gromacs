@@ -49,6 +49,11 @@ PP/PME 是否真正在设备上执行，仍由目标节点探针和日志决定�
 `--mode both` 会提交 CPU 和 HIP，下载两套结果并运行容差检查；调度器状态、平台
 退出码和 workload `status=passed` 仍分别检查。
 
+2026.4 PMPI 参考 module 的单节点验证覆盖单 rank CPU/HIP、双 rank CPU PME 和
+双 GPU PME，使用 `mpirun` 加 OB1 启动器参数；PMPI 多节点未测试。更大规模的
+134,177 原子 ADH 参考运行记录在性能观察中，扩展性好于微 case 但仍为次线性，
+不是生产 benchmark。
+
 ## 空白账户基线
 
 不要假设维护者的 module、安装前缀或 modulefile。空白 SCNet 账户必须通过
@@ -118,8 +123,13 @@ GPU 数量。这些事实不能从申请的分配资源推断。
   UCX/InfiniBand abort；
 - 双 rank/双 GPU 微 case 强制 GPU-aware MPI 可以完成，但这不能作为规模化
   GPU-aware 性能或正确性证据。在一次 71,844 原子的短 Lysozyme 运行中，强制
-  GPU-aware MPI 明显慢于默认路径；启用前必须实测。参考 UCX 构建未启用 ROCm，
-  因此 GPU-aware MPI 不可用。
+  GPU-aware MPI 明显慢于默认路径；启用前必须实测。默认参考 UCX 构建未启用
+  ROCm，因此 GPU-aware MPI 不可用。
+- 还测试了启用 ROCm 的 UCX/OpenMPI 构建。GROMACS 报告
+  `MPI (GPU-aware: HIP)` 并使用 direct GPU communication，但性能远低于
+  host-staged（跨节点约 1.7 ns/day，单节点约 0.97 ns/day，而 host-staged
+  为 43.5/43.1 ns/day）。限制 `UCX_TLS=rocm_ipc,sm,self,tcp` 后达到
+  18.1 ns/day，仍低于 host-staged。该路径调优前默认关闭 GPU-aware MPI。
 - 在该参考集群，多节点 OpenMPI 5 需要 `srun` 加
   `SLURM_MPI_TYPE=pmix`，并且分配必须用 `#SBATCH --ntasks-per-node=...` 平衡。
   不平衡时 rank 会集中到一个节点，GROMACS GPU 任务分配失败。

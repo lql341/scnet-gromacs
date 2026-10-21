@@ -24,6 +24,7 @@ npme="${GROMACS_NPME:-}"
 expect_gpu_count="${GROMACS_EXPECT_GPU_COUNT:-}"
 force_gpu_aware="${GROMACS_FORCE_GPU_AWARE_MPI:-0}"
 launcher="${GROMACS_MPI_LAUNCHER:-srun}"
+launcher_args="${GROMACS_MPI_LAUNCHER_ARGS:-}"
 module_path="${GROMACS_MODULEPATH:-}"
 env_script="${GROMACS_ENV_SCRIPT:-}"
 case_root="${GROMACS_CASE_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/cases/argon8}"
@@ -106,8 +107,14 @@ fi
 if [ "$ranks" -gt 1 ]; then
     case "$launcher" in
         mpirun|mpiexec)
-            "$launcher" -np "$ranks" "$gmx" mdrun "${mdrun_args[@]}" \
-                >mdrun.log 2>&1
+            if [ -n "$launcher_args" ]; then
+                read -r -a extra_launcher_args <<< "$launcher_args"
+                "$launcher" "${extra_launcher_args[@]}" -np "$ranks" \
+                    "$gmx" mdrun "${mdrun_args[@]}" >mdrun.log 2>&1
+            else
+                "$launcher" -np "$ranks" "$gmx" mdrun "${mdrun_args[@]}" \
+                    >mdrun.log 2>&1
+            fi
             ;;
         *)
             srun_args=(--ntasks="$ranks" --cpus-per-task="$omp_threads")

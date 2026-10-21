@@ -1,17 +1,45 @@
 {
   "schema_version": 1,
   "kind": "gromacs-benchmark-catalog",
-  "source": "https://manual.gromacs.org/current/user-guide/mdrun-performance.html",
-  "note": "Catalog only. No performance numbers are committed or loaded as skill context. Confirm the upstream benchmark-suite revision before comparing results.",
+  "source": "https://ftp.gromacs.org/pub/benchmarks/",
+  "note": "Catalog only. No performance numbers are committed or loaded as skill context. A blank account must confirm the upstream archive and reproduce measurements on its own target.",
   "cases": [
-    {"id": "benchMEM", "system_class": "membrane", "use": "CPU/GPU scaling"},
-    {"id": "benchPEP", "system_class": "peptide", "use": "single-GPU and multi-GPU"},
-    {"id": "benchPEP-h", "system_class": "peptide", "use": "larger peptide"},
-    {"id": "benchRIB", "system_class": "ribosome", "use": "large-system scaling"},
-    {"id": "benchSTMV", "system_class": "virus", "use": "multi-GPU scaling"},
-    {"id": "benchSTMV-h", "system_class": "virus", "use": "larger virus system"},
-    {"id": "benchCellulose", "system_class": "carbohydrate", "use": "CPU/GPU comparison"},
-    {"id": "benchLipid", "system_class": "lipid", "use": "membrane/lipid scaling"}
+    {
+      "id": "ADH_bench_systems",
+      "system_class": "alcohol-dehydrogenase-in-water",
+      "use": "multi-GPU and multi-node scaling",
+      "archive": "ADH_bench_systems.tar.gz"
+    },
+    {
+      "id": "water_GMX50_bare",
+      "system_class": "water-box",
+      "use": "water/PME scaling",
+      "archive": "water_GMX50_bare.tar.gz"
+    },
+    {
+      "id": "water_bare_hbonds",
+      "system_class": "water-box-with-hbonds",
+      "use": "water/PME comparison",
+      "archive": "water_bare_hbonds.tar.gz"
+    },
+    {
+      "id": "rnase_bench_systems",
+      "system_class": "rnase",
+      "use": "protein/PME comparison",
+      "archive": "rnase_bench_systems.tar.gz"
+    },
+    {
+      "id": "gmxbench-3.0",
+      "system_class": "mixed-benchmark-suite",
+      "use": "cross-system comparison",
+      "archive": "gmxbench-3.0.tar.gz"
+    },
+    {
+      "id": "villin_vsites",
+      "system_class": "villin",
+      "use": "small-protein comparison",
+      "archive": "villin_vsites.tar.gz"
+    }
   ],
   "measurement_schema": {
     "private": true,

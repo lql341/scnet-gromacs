@@ -212,6 +212,7 @@ def build_command(case, mode, run_root, remote_scripts, remote_case, settings):
         "GROMACS_MPI_RANKS_PER_NODE": str(settings["ranks_per_node"]),
         "GROMACS_OMP_THREADS": str(settings["omp_threads"]),
         "GROMACS_MPI_LAUNCHER": settings["launcher"],
+        "GROMACS_MPI_LAUNCHER_ARGS": settings["launcher_args"],
     }
     if settings["expect_version"]:
         env["GROMACS_EXPECT_VERSION"] = settings["expect_version"]
@@ -460,6 +461,7 @@ def main(argv=None):
     parser.add_argument("--ranks-per-node", type=int)
     parser.add_argument("--omp-threads", type=int)
     parser.add_argument("--mpi-launcher")
+    parser.add_argument("--mpi-launcher-args")
     parser.add_argument("--npme")
     parser.add_argument("--force-gpu-aware", action="store_true")
     parser.add_argument("--require-gpu-aware", action="store_true")
@@ -527,6 +529,9 @@ def main(argv=None):
             raise RunnerError("profile CPU/DCU/MPI values must be integers") from exc
         walltime = args.walltime or profile.get("WALLTIME", "00:15:00")
         launcher = args.mpi_launcher or profile.get("MPI_LAUNCHER", "srun")
+        launcher_args = args.mpi_launcher_args or profile.get(
+            "MPI_LAUNCHER_ARGS", ""
+        )
         npme = args.npme or profile.get("NPME", "")
         mpi_env = {}
         for key, value in profile.items():
@@ -646,6 +651,7 @@ def main(argv=None):
                     "ranks_per_node": ranks_per_node,
                     "omp_threads": omp_threads,
                     "launcher": launcher,
+                    "launcher_args": launcher_args,
                     "npme": npme,
                     "mpi_env": mpi_env,
                     "force_gpu_aware": force_gpu_aware,

@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.6.0
+Current release: 0.7.0
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -52,10 +52,12 @@ reference environment; it is not a guarantee for every account or cluster.
 | GROMACS | CPU | HIP | PME | multi-rank PME | multi-GPU | multi-node | PMPI |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026.3 | yes | yes | yes | yes | yes | yes | yes |
-| 2026.4 | yes | yes | yes | yes | yes | yes | not tested |
+| 2026.4 | yes | yes | yes | yes | yes | yes | yes (single-node) |
 
-The 2026.4 reference build came from the official 2026.4 source and was exercised
-through a private module path; it is not a site-published module. See
+The 2026.4 reference builds came from the official 2026.4 source and were
+exercised through reference modules. The 2026.4 PMPI variant was validated
+single-node; PMPI multi-node was not tested. The modules are not bundled; a blank
+account must build or obtain its own. See
 [references/version-coverage.md](references/version-coverage.md) for the basis,
 multi-node/UCX findings and the minimum evidence needed for a new account.
 
@@ -244,6 +246,20 @@ nodes measured 41.3 ns/day with the working UCX HCA path, 32.0 ns/day with the
 OB1/TCP fallback, and a default-UCX HCA failure before mdrun. OB1 is a fallback,
 not a default. Forced GPU-aware MPI was unusably slow; do not enable it without
 measurement.
+
+A larger ADH benchmark, 134,177 atoms, 200 steps, measured 21.1 ns/day on one
+GPU, 22.7 on two GPUs, 28.7 on four GPUs and 27.8 on two nodes/four GPUs. It
+scales better than the tiny cases but remains sublinear; this is not a production
+benchmark.
+
+A ROCm-enabled UCX/OpenMPI build was also tested. GROMACS detected GPU-aware MPI
+(`MPI library: MPI (GPU-aware: HIP)` and `GPU direct communication will be used`),
+but the direct path was much slower than host-staged communication: about
+1.7 ns/day for the two-node/four-GPU Lysozyme run and 0.97 ns/day for the
+single-node/four-GPU run, versus 43.5/43.1 ns/day host-staged. A restricted
+`UCX_TLS=rocm_ipc,sm,self,tcp` run reached 18.1 ns/day, still below host-staged.
+The site's DTK/HIP/mlx5 path needs more UCX tuning before GPU-aware MPI is
+useful; keep it disabled by default.
 
 The checker needs the `inputs.sha256` file written by the current smoke script.
 Runs from older script versions do not contain it.
