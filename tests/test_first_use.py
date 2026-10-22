@@ -2,6 +2,7 @@ import argparse
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -103,10 +104,11 @@ class DoctorTests(unittest.TestCase):
         payload = {
             "ok": True,
             "data": {
+                "ok": True,
                 "checks": [
                     {"name": "openapi_credentials", "ok": True},
                     {"name": "openapi_region", "ok": True},
-                ]
+                ],
             },
         }
         completed = mock.Mock(
@@ -114,8 +116,13 @@ class DoctorTests(unittest.TestCase):
         )
         status = {
             "scnet_hpc": {"found": True, "path": "/fake/scnet.py"},
+            "configuration": {
+                "region": "region-a",
+                "cpu_queue": "cpu-a",
+                "hip_queue": "dcu-a",
+            },
         }
-        with mock.patch.object(doctor.subprocess, "run", return_value=completed):
+        with mock.patch.object(doctor.subprocess, "run", return_value=completed) as run:
             online, rc = doctor._online_status(status, None, "profile")
         self.assertEqual(rc, 0)
         self.assertTrue(online["ok"])
@@ -123,6 +130,173 @@ class DoctorTests(unittest.TestCase):
             [item["name"] for item in online["checks"]],
             ["openapi_credentials", "openapi_region"],
         )
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--region") + 1], "region-a")
+        self.assertEqual(command.count("--queue"), 2)
+        self.assertIn("cpu-a", command)
+        self.assertIn("dcu-a", command)
+
+    def test_online_doctor_inner_failure_is_not_verified(self):
+        payload = {
+            "ok": True,
+            "data": {
+                "ok": False,
+                "checks": [{"name": "openapi_connection", "ok": False}],
+            },
+        }
+        completed = mock.Mock(
+            returncode=1, stdout=json.dumps(payload), stderr=""
+        )
+        status = {
+            "scnet_hpc": {"found": True, "path": "/fake/scnet.py"},
+            "configuration": {
+                "region": "region-a",
+                "cpu_queue": "cpu-a",
+                "hip_queue": None,
+            },
+        }
+        with mock.patch.object(doctor.subprocess, "run", return_value=completed):
+            online, rc = doctor._online_status(status, None, None)
+        self.assertFalse(online["ok"])
+        self.assertEqual(rc, 1)
+
+    def test_online_doctor_with_data_ok_false_returns_nonzero_cli(self):
+        payload = {
+            "ok": True,
+            "data": {
+                "ok": False,
+                "checks": [{"name": "openapi_connection", "ok": False}],
+            },
+        }
+        completed = mock.Mock(
+            returncode=0, stdout=json.dumps(payload), stderr=""
+        )
+        status = {
+            "scnet_hpc": {"found": True, "path": "/fake/scnet.py"},
+            "configuration": {
+                "region": "region-a",
+                "cpu_queue": "cpu-a",
+                "hip_queue": None,
+            },
+            "readiness": {"remote": "unknown"},
+        }
+        output = io.StringIO()
+        with mock.patch.object(
+            doctor, "probe", return_value=status
+        ), mock.patch.object(
+            doctor.subprocess, "run", return_value=completed
+        ), contextlib.redirect_stdout(output):
+            rc = doctor.main(["--online", "--json"])
+        self.assertNotEqual(rc, 0)
+        envelope = json.loads(output.getvalue())
+        self.assertFalse(envelope["online"]["ok"])
+        self.assertNotEqual(envelope["readiness"]["remote"], "verified")
+
+    def test_online_uses_resolved_region_not_profile_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            profile = Path(tmp) / "profile.conf"
+            profile.write_text(
+                'OPENAPI_REGION_ID="region-b"\n'
+                'CPU_PARTITION="cpu-b"\n'
+                'DCU_PARTITION="dcu-b"\n'
+            )
+            args = namespace(profile=profile, region="region-a")
+            with mock.patch.object(
+                doctor, "_credentials", return_value={
+                    "present": True,
+                    "source": "shared_store",
+                    "env_keys_present": [],
+                    "store_error": None,
+                }
+            ), mock.patch.object(doctor, "find_scnet_hpc", return_value=Path("/fake/scnet.py")):
+                status = doctor.probe(args=args)
+            payload = {
+                "ok": True,
+                "data": {"ok": True, "checks": [{"name": "openapi_connection", "ok": True}]},
+            }
+            completed = mock.Mock(
+                returncode=0, stdout=json.dumps(payload), stderr=""
+            )
+            with mock.patch.object(doctor.subprocess, "run", return_value=completed) as run:
+                online, rc = doctor._online_status(status, None, None)
+        self.assertEqual(rc, 0)
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--region") + 1], "region-a")
+        self.assertNotIn("region-b", command)
+
+    def test_environment_overrides_profile_consistently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            profile = root / "profile.conf"
+            profile.write_text(
+                'OPENAPI_REGION_ID="profile-region"\n'
+                'CPU_PARTITION="profile-cpu"\n'
+                'GROMACS_MODULE="profile-module"\n'
+                'GROMACS_BINARY="profile-binary"\n'
+                'CPUS_PER_JOB=2\n'
+            )
+            env = {
+                "GROMACS_MODULE": "env-module",
+                "GROMACS_BINARY": "env-binary",
+            }
+            with mock.patch.dict(os.environ, env, clear=False), mock.patch.object(
+                doctor, "_credentials", return_value={
+                    "present": True,
+                    "source": "environment",
+                    "env_keys_present": list(doctor.ENV_KEYS),
+                    "store_error": None,
+                }
+            ), mock.patch.object(doctor, "find_scnet_hpc", return_value=None):
+                status = doctor.probe(args=namespace(profile=profile))
+            output = io.StringIO()
+            with mock.patch.dict(os.environ, env, clear=False), contextlib.redirect_stdout(output):
+                rc = run_openapi.main(
+                    [
+                        "--profile",
+                        str(profile),
+                        "--run-root",
+                        "/remote/new-run",
+                        "--download-dir",
+                        str(root / "download"),
+                        "--case",
+                        "argon8",
+                        "--mode",
+                        "cpu",
+                        "--dry-run",
+                    ]
+                )
+            plan = json.loads(output.getvalue())
+        self.assertEqual(rc, 0)
+        self.assertEqual(status["configuration"]["cpu_module"], "env-module")
+        self.assertEqual(status["configuration"]["binary"], "env-binary")
+        self.assertEqual(plan["modes_config"]["cpu"]["module"], "env-module")
+        self.assertEqual(plan["modes_config"]["cpu"]["binary"], "env-binary")
+
+    def test_online_missing_queue_binding_is_failure(self):
+        payload = {
+            "ok": True,
+            "data": {
+                "ok": False,
+                "checks": [
+                    {"name": "openapi_queue_binding", "ok": False},
+                ],
+            },
+        }
+        completed = mock.Mock(
+            returncode=1, stdout=json.dumps(payload), stderr=""
+        )
+        status = {
+            "scnet_hpc": {"found": True, "path": "/fake/scnet.py"},
+            "configuration": {
+                "region": "region-a",
+                "cpu_queue": "missing-queue",
+                "hip_queue": None,
+            },
+        }
+        with mock.patch.object(doctor.subprocess, "run", return_value=completed):
+            online, rc = doctor._online_status(status, None, None)
+        self.assertFalse(online["ok"])
+        self.assertNotEqual(rc, 0)
 
 
 class RunRootTests(unittest.TestCase):

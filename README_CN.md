@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.10.1
+当前版本：0.10.2
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较

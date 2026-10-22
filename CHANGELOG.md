@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.2 (2026-10-22)
+
+- Treat the online doctor as healthy only when the process succeeds, the outer
+  envelope and `data.ok` are true, and checks are well formed.
+- Pass the final resolved region and both selected queues to `scnet-hpc doctor`
+  and require queue binding in that region.
+- Share final setting resolution between doctor and runner; CLI overrides
+  environment, which overrides the profile for modules, binary and env script.
+- Add failure-envelope, region/queue-binding and environment/profile-conflict
+  regressions.
+
 ## 0.10.1 (2026-10-22)
 
 - Separate doctor readiness into credentials, local region/queue configuration

@@ -10,7 +10,8 @@ SCNet. Read [references/validation.md](references/validation.md) and, for a
 first-time SCNet user, [references/first-use.md](references/first-use.md).
 Run `python3 scripts/doctor.py --profile clusters/<profile>.conf` before
 configuring or submitting; `--json` is machine-readable and `--dry-run` on the
-runner prints the plan without touching the remote.
+runner prints the plan without touching the remote. `--online` requires
+scnet-hpc >=0.6.15 so it verifies the selected region and queues.
 
 ## Rules
 

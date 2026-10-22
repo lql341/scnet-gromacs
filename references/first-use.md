@@ -47,7 +47,8 @@ python3 scripts/doctor.py --region <region> --cpu-queue <queue> --json
 # Fail unless credentials and local region/queue configuration are present.
 python3 scripts/doctor.py --profile clusters/<profile>.conf --require-openapi
 
-# Optional online check; requires an installed scnet-hpc.
+# Optional online check; requires scnet-hpc >=0.6.15 so the selected region
+# and queues are passed to the read-only doctor.
 python3 scripts/doctor.py --profile clusters/<profile>.conf --online --cluster <hpc-profile> --json
 
 # Offline plan; no client, credentials or remote calls.

@@ -26,7 +26,12 @@ from pathlib import Path, PurePosixPath
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
-from gromacs_profile import ProfileError, load_profile, resolve_profile
+from gromacs_profile import (
+    ProfileError,
+    load_profile,
+    resolve_profile,
+    resolve_settings,
+)
 from scnet_lite import Client, ClientError, default_region
 
 CASES = {
@@ -527,58 +532,22 @@ def main(argv=None):
         except ProfileError as exc:
             raise RunnerError(str(exc)) from exc
 
-        region = (
-            args.region
-            or profile.get("OPENAPI_REGION_ID")
-            or os.environ.get("SCNET_OPENAPI_REGION_ID")
-        )
+        resolved = resolve_settings(args, profile)
+        region = resolved["region"]
         if not region:
             raise RunnerError(
                 "no OpenAPI region configured; pass --region or set "
                 "OPENAPI_REGION_ID in the profile"
             )
 
-        cpu_queue = (
-            args.cpu_queue
-            or profile.get("CPU_PARTITION")
-            or os.environ.get("GROMACS_CPU_QUEUE")
-        )
-        hip_queue = (
-            args.hip_queue
-            or profile.get("DCU_PARTITION")
-            or os.environ.get("GROMACS_HIP_QUEUE")
-        )
-        cpu_module = (
-            args.cpu_module
-            if args.cpu_module is not None
-            else (
-                profile.get("GROMACS_MODULE")
-                or os.environ.get("GROMACS_MODULE", "")
-            )
-        )
-        hip_module = (
-            args.hip_module
-            if args.hip_module is not None
-            else (
-                profile.get("GROMACS_GPU_MODULE")
-                or os.environ.get("GROMACS_MODULE", "")
-            )
-        )
-        binary = (
-            args.binary
-            or profile.get("GROMACS_BINARY")
-            or os.environ.get("GROMACS_BINARY")
-            or "gmx_mpi"
-        )
-        env_script = (
-            args.env_script
-            or profile.get("GROMACS_ENV_SCRIPT", "")
-            or os.environ.get("GROMACS_ENV_SCRIPT", "")
-        )
-        if not hip_module:
-            hip_module = cpu_module
+        cpu_queue = resolved["cpu_queue"]
+        hip_queue = resolved["hip_queue"]
+        cpu_module = resolved["cpu_module"] or ""
+        hip_module = resolved["hip_module"] or cpu_module
         if not cpu_module:
             cpu_module = hip_module
+        binary = resolved["binary"] or "gmx_mpi"
+        env_script = resolved["env_script"] or ""
         gpu_arch = profile.get("GPU_ARCH")
         expect_version = profile.get("GROMACS_EXPECT_VERSION")
         module_path = profile.get("GROMACS_MODULEPATH", "")

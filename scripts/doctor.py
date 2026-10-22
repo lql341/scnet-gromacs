@@ -16,7 +16,12 @@ import sys
 SCRIPTS = Path(__file__).resolve().parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
-from gromacs_profile import ProfileError, load_profile, resolve_profile
+from gromacs_profile import (
+    ProfileError,
+    load_profile,
+    resolve_profile,
+    resolve_settings,
+)
 from scnet_credentials import CredentialError, load_openapi_credentials
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,52 +78,29 @@ def _profile_config(args):
     return config
 
 
-def _first(*values):
-    for value in values:
-        if value not in (None, ""):
-            return str(value)
-    return None
-
-
 def _configuration(args):
     profile = _profile_config(args)
-    region = _first(
-        args.region,
-        profile.get("OPENAPI_REGION_ID"),
-        os.environ.get("SCNET_OPENAPI_REGION_ID"),
-    )
-    cpu_queue = _first(
-        args.cpu_queue,
-        profile.get("CPU_PARTITION"),
-        os.environ.get("GROMACS_CPU_QUEUE"),
-    )
-    hip_queue = _first(
-        args.hip_queue,
-        profile.get("DCU_PARTITION"),
-        os.environ.get("GROMACS_HIP_QUEUE"),
-    )
-    module = _first(
-        os.environ.get("GROMACS_MODULE"),
-        profile.get("GROMACS_MODULE"),
-    )
-    if module:
+    settings = resolve_settings(args, profile)
+    region = settings["region"]
+    cpu_queue = settings["cpu_queue"]
+    hip_queue = settings["hip_queue"]
+    cpu_module = settings["cpu_module"]
+    hip_module = settings["hip_module"]
+    if cpu_module:
+        module = cpu_module
+        module_status = "declared"
+    elif hip_module:
+        module = hip_module
         module_status = "declared"
     else:
         module = "gromacs/2026.3-dtk26.04-z100"
         module_status = "default_unverified"
-    binary = _first(
-        os.environ.get("GROMACS_BINARY"),
-        profile.get("GROMACS_BINARY"),
-    )
-    if binary:
-        binary_status = "declared"
-    else:
+    binary = settings["binary"]
+    if not binary:
         binary = "gmx_mpi"
         binary_status = "default_unverified"
-    env_script = _first(
-        os.environ.get("GROMACS_ENV_SCRIPT"),
-        profile.get("GROMACS_ENV_SCRIPT"),
-    )
+    else:
+        binary_status = "declared"
     ready = bool(
         region and (cpu_queue or hip_queue) and not profile["profile_error"]
     )
@@ -130,10 +112,12 @@ def _configuration(args):
         "cpu_queue": cpu_queue,
         "hip_queue": hip_queue,
         "module": module,
+        "cpu_module": cpu_module,
+        "hip_module": hip_module,
         "module_status": module_status,
         "binary": binary,
         "binary_status": binary_status,
-        "env_script": env_script,
+        "env_script": settings["env_script"],
         "ready": ready,
     }
 
@@ -295,14 +279,28 @@ def render(status):
 def _online_status(status, explicit, cluster):
     if not status["scnet_hpc"]["found"]:
         return {"ok": False, "error": "scnet-hpc not found"}, 2
+    configuration = status["configuration"]
+    region = configuration.get("region")
+    queues = []
+    for value in (configuration.get("cpu_queue"), configuration.get("hip_queue")):
+        if value and value not in queues:
+            queues.append(str(value))
+    if not region:
+        return {"ok": False, "error": "no resolved OpenAPI region"}, 2
+    if not queues:
+        return {"ok": False, "error": "no resolved CPU/DCU queue"}, 2
     command = [
         sys.executable,
         status["scnet_hpc"]["path"],
         "--backend",
         "openapi",
+        "--region",
+        str(region),
     ]
     if cluster:
         command.extend(["--cluster", cluster])
+    for queue in queues:
+        command.extend(["--queue", queue])
     command.extend(["--json", "doctor"])
     try:
         completed = subprocess.run(
@@ -322,17 +320,50 @@ def _online_status(status, explicit, cluster):
             "returncode": completed.returncode,
         }, (completed.returncode or 2)
     data = payload.get("data")
-    checks = data.get("checks", []) if isinstance(data, dict) else []
+    if not isinstance(data, dict):
+        return {
+            "ok": False,
+            "error": "scnet-hpc doctor response has no data object",
+            "returncode": completed.returncode,
+        }, (completed.returncode or 2)
+    checks = data.get("checks")
+    if (
+        not isinstance(checks, list)
+        or not checks
+        or not all(
+            isinstance(item, dict)
+            and "name" in item
+            and isinstance(item.get("ok"), bool)
+            for item in checks
+        )
+    ):
+        return {
+            "ok": False,
+            "error": "scnet-hpc doctor checks are malformed",
+            "returncode": completed.returncode,
+        }, (completed.returncode or 2)
+    healthy = (
+        completed.returncode == 0
+        and payload.get("ok") is True
+        and data.get("ok") is True
+    )
     online = {
-        "ok": bool(payload.get("ok")),
+        "ok": healthy,
         "returncode": completed.returncode,
+        "region": str(region),
+        "queues": queues,
         "checks": [
             {"name": item.get("name"), "ok": bool(item.get("ok"))}
             for item in checks
-            if isinstance(item, dict)
         ],
     }
-    return online, (0 if online["ok"] else (completed.returncode or 2))
+    if not healthy:
+        online["error"] = (
+            "scnet-hpc doctor reported unhealthy state"
+            if completed.returncode == 0
+            else "scnet-hpc doctor exited nonzero"
+        )
+    return online, (0 if healthy else (completed.returncode or 2))
 
 
 def main(argv=None):

@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.10.1
+Current release: 0.10.2
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
