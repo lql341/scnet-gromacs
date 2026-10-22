@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.3 (2026-10-22)
+
+- Pass `--queue` to the `doctor` subcommand after the subcommand token, matching
+  the scnet-hpc argument grammar.
+- Add a regression asserting the online command order.
+
 ## 0.10.2 (2026-10-22)
 
 - Treat the online doctor as healthy only when the process succeeds, the outer

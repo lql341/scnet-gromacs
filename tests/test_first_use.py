@@ -135,6 +135,7 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual(command.count("--queue"), 2)
         self.assertIn("cpu-a", command)
         self.assertIn("dcu-a", command)
+        self.assertLess(command.index("doctor"), command.index("--queue"))
 
     def test_online_doctor_inner_failure_is_not_verified(self):
         payload = {

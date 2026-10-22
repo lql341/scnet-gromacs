@@ -299,9 +299,9 @@ def _online_status(status, explicit, cluster):
     ]
     if cluster:
         command.extend(["--cluster", cluster])
+    command.extend(["--json", "doctor"])
     for queue in queues:
         command.extend(["--queue", queue])
-    command.extend(["--json", "doctor"])
     try:
         completed = subprocess.run(
             command,
