@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.3 (2026-10-21)
+
+- Remove the legacy plain/PMPI 2026.3 module aliases from the reference account;
+  keep one DTK/target module per version:
+  `gromacs/2026.3-dtk26.04-z100` and `gromacs/2026.4-dtk26.04-z100`.
+- PMPI remains an optional profile, not a module name.
+
 ## 0.9.2 (2026-10-21)
 
 - Align the smoke/probe default module name with the DTK/target convention:
