@@ -10,7 +10,7 @@
 set -euo pipefail
 
 : "${GROMACS_RUN_ROOT:?set a writable unique run root}"
-module_name="${GROMACS_MODULE-gromacs/2026.3}"
+module_name="${GROMACS_MODULE-gromacs/2026.3-dtk26.04-z100}"
 binary="${GROMACS_BINARY:-gmx_mpi}"
 mode="${GROMACS_GPU_MODE:-cpu}"
 gpu_pme="${GROMACS_GPU_PME:-0}"

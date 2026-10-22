@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.9.1
+当前版本：0.9.2
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -78,7 +78,7 @@ bash scripts/validate.sh
 应通过 `scnet-hpc` OpenAPI 在目标计算队列提交这些脚本。可设置：
 
 ```text
-GROMACS_MODULE     module 名称，默认 gromacs/2026.3
+GROMACS_MODULE     module 名称，默认 gromacs/2026.3-dtk26.04-z100
 GROMACS_MODULEPATH 可选的私有 modulefile 目录，用于候选构建
 GROMACS_BINARY     可执行文件，默认 gmx_mpi
 GROMACS_GPU_MODE   cpu 或 hip，默认 cpu

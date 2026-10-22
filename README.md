@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.9.1
+Current release: 0.9.2
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -90,7 +90,7 @@ Submit the scripts through `scnet-hpc` OpenAPI on the selected compute queue.
 The scripts accept:
 
 ```text
-GROMACS_MODULE     module name, default gromacs/2026.3
+GROMACS_MODULE     module name, default gromacs/2026.3-dtk26.04-z100
 GROMACS_MODULEPATH optional private modulefile directory for a candidate build
 GROMACS_BINARY     binary name, default gmx_mpi
 GROMACS_GPU_MODE   cpu or hip, default cpu

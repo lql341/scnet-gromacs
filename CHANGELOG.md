@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.2 (2026-10-21)
+
+- Align the smoke/probe default module name with the DTK/target convention:
+  `gromacs/2026.3-dtk26.04-z100`.
+
 ## 0.9.1 (2026-10-21)
 
 - Correct the user-level module name to include the backend version and target:
