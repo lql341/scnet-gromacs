@@ -2,10 +2,10 @@
 """OpenAPI-first runner for the bundled GROMACS smoke cases.
 
 Remote directory creation, upload, submission, waiting and artifact download
-all go through the installed scnet-hpc CLI with ``--backend openapi``. This
-runner does not use SSH and does not implement its own credential or transport
-layer. Use SSH only for separate, bounded diagnosis when OpenAPI cannot expose
-the needed fact.
+all go through the embedded OpenAPI adapter vendored from scnet-hpc via the
+scnet-hashcat reference adapter. The runner does not use SSH and does not require
+an installed scnet-hpc CLI for normal OpenAPI runs. Use scnet-hpc only for
+first-use setup, SSH, deployment or broader diagnosis.
 
 Examples:
     python3 contrib/run_openapi.py --cluster kseshell \
@@ -16,13 +16,16 @@ Examples:
 """
 
 import argparse
-import json
-import os
 import shlex
 import subprocess
 import sys
 import time
 from pathlib import Path, PurePosixPath
+
+SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+from scnet_lite import Client, ClientError, default_region
 
 CASES = {
     "argon8": {
@@ -76,31 +79,6 @@ def remote_root(value):
     return PurePosixPath(text)
 
 
-def find_scnet_hpc(explicit):
-    candidates = []
-    if explicit:
-        candidates.append(Path(explicit).expanduser())
-    env_root = os.environ.get("SCNET_HPC_ROOT")
-    if env_root:
-        candidates.append(Path(env_root).expanduser())
-    candidates.extend(
-        [
-            repo_root().parent / "scnet-hpc",
-            Path.home() / ".codex" / "skills" / "scnet-hpc",
-            Path.home() / ".claude" / "skills" / "scnet-hpc",
-        ]
-    )
-    for candidate in candidates:
-        if candidate.is_file() and candidate.name == "scnet.py":
-            return candidate
-        cli = candidate / "scripts" / "scnet.py"
-        if cli.is_file():
-            return cli
-    raise RunnerError(
-        "scnet-hpc CLI not found; pass --scnet-hpc or set SCNET_HPC_ROOT"
-    )
-
-
 def load_profile(path):
     values = {}
     for raw in path.read_text().splitlines():
@@ -124,49 +102,88 @@ def load_profile(path):
 
 
 class Scnet:
-    def __init__(self, cli, cluster, region):
-        self.base = [
-            sys.executable,
-            str(cli),
-            "--backend",
-            "openapi",
-            "--cluster",
-            cluster,
-        ]
-        if region:
-            self.base.extend(["--region", region])
-        self.base.append("--json")
+    """Embedded OpenAPI adapter; no scnet-hpc CLI or SSH dependency."""
+
+    def __init__(self, region):
+        self.client = Client()
+        self.region = region or default_region()
 
     def run(self, *args):
-        command = self.base + [str(arg) for arg in args]
-        completed = subprocess.run(
-            command,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        if completed.returncode != 0:
-            raise RunnerError(
-                "scnet-hpc failed ({}): {}".format(
-                    completed.returncode,
-                    (completed.stderr or completed.stdout).strip(),
-                )
-            )
         try:
-            payload = json.loads(completed.stdout)
-        except json.JSONDecodeError as exc:
+            return self._dispatch([str(arg) for arg in args])
+        except ClientError as exc:
             raise RunnerError(
-                "scnet-hpc did not return JSON: {}".format(completed.stdout.strip())
-            ) from exc
-        if not payload.get("ok", False):
-            raise RunnerError(
-                "scnet-hpc {} failed: {} {}".format(
-                    args[0],
-                    payload.get("error_code"),
-                    payload.get("error"),
+                "{} (run python3 scripts/doctor.py; see references/first-use.md)".format(
+                    exc
                 )
-            )
-        return payload.get("data")
+            ) from exc
+
+    def _dispatch(self, args):
+        if not args:
+            raise RunnerError("empty adapter operation")
+        operation = args[0]
+        if operation == "files":
+            path = _option(args, "--path")
+            limit = int(_option(args, "--limit", "200"))
+            return self.client.ls(path, self.region, limit=limit)
+        if operation == "mkdir":
+            return self.client.mkdir(args[-1], self.region, parents=True)
+        if operation == "upload":
+            if len(args) != 3:
+                raise RunnerError("upload expects local_path remote_dir")
+            return self.client.upload(args[1], args[2], self.region)
+        if operation == "queues":
+            return self.client.queues(self.region)
+        if operation == "download":
+            if len(args) != 3:
+                raise RunnerError("download expects remote_path local_path")
+            return self.client.download(args[1], args[2], self.region)
+        if operation == "wait":
+            job_id = args[1]
+            timeout = int(_option(args, "--wait-timeout", "600"))
+            interval = int(_option(args, "--interval", "15"))
+            try:
+                job = self.client.wait(job_id, self.region, interval, timeout)
+                return {"state": job.get("state"), "timed_out": False, "job": job}
+            except ClientError as exc:
+                if "still" in str(exc).lower() or "timeout" in str(exc).lower():
+                    return {"state": "RUNNING", "timed_out": True}
+                raise
+        if operation == "--details" and len(args) >= 3 and args[1] == "job":
+            return self.client.job(args[2], self.region)
+        if operation == "job":
+            return self.client.job(args[1], self.region)
+        if operation == "submit":
+            options = {}
+            scheduler_options = []
+            index = 1
+            while index < len(args):
+                key = args[index]
+                if key == "--scheduler-option":
+                    scheduler_options.append(args[index + 1])
+                    index += 2
+                    continue
+                if not key.startswith("--") or index + 1 >= len(args):
+                    raise RunnerError("invalid submit option: " + key)
+                options[key[2:].replace("-", "_")] = args[index + 1]
+                index += 2
+            options["scheduler_options"] = scheduler_options
+            options["region"] = self.region
+            for key in ("nodes", "cpus", "dcus"):
+                if key in options:
+                    options[key] = int(options[key])
+            return self.client.submit(options)
+        raise RunnerError("unsupported embedded adapter operation: " + operation)
+
+
+def _option(args, name, default=None):
+    try:
+        index = args.index(name)
+    except ValueError:
+        return default
+    if index + 1 >= len(args):
+        raise RunnerError("missing value for " + name)
+    return args[index + 1]
 
 
 def remote_children(scnet, path):
@@ -442,7 +459,7 @@ def compare_runs(local_scripts, cpu_run, hip_run, report):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Run GROMACS smoke cases through scnet-hpc OpenAPI."
+        description="Run GROMACS smoke cases through the embedded OpenAPI adapter."
     )
     parser.add_argument("--cluster", required=True, help="scnet-hpc profile name")
     parser.add_argument(
@@ -455,7 +472,6 @@ def main(argv=None):
         "--mode", choices=("cpu", "hip", "both"), default="cpu", help="backend modes"
     )
     parser.add_argument("--profile", type=Path, help="GROMACS cluster profile")
-    parser.add_argument("--scnet-hpc", help="scnet-hpc skill root or scnet.py")
     parser.add_argument("--cpu-queue")
     parser.add_argument("--hip-queue")
     parser.add_argument("--cpu-module")
@@ -611,8 +627,7 @@ def main(argv=None):
         if args.wait_timeout < 1:
             raise RunnerError("--wait-timeout must be positive")
 
-        cli = find_scnet_hpc(args.scnet_hpc)
-        scnet = Scnet(cli, args.cluster, profile.get("OPENAPI_REGION_ID"))
+        scnet = Scnet(profile.get("OPENAPI_REGION_ID"))
         run_root = remote_root(args.run_root.expanduser())
 
         download_dir = args.download_dir

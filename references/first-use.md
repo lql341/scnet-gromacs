@@ -61,9 +61,10 @@ to the read-only `scnet-hpc doctor`.
 
 ## 5. First job
 
-- `contrib/run_openapi.py` is optional and calls an installed `scnet-hpc` CLI.
-  Users load only `scnet-gromacs`; `scnet-hpc` is not a second skill to load.
-- If `scnet-hpc` is unavailable, drive the core scripts with the site's scheduler
-  client or install the CLI.
+- `contrib/run_openapi.py` is optional and uses the embedded OpenAPI adapter.
+  Users load only `scnet-gromacs`; `scnet-hpc` is optional for setup/SSH and is
+  not a second skill to load.
+- If `scnet-hpc` is unavailable, the embedded adapter still supports normal
+  OpenAPI runs; the core scripts can also be driven by a site scheduler client.
 - Start with a CPU smoke, then HIP/PME, then multi-rank. Do not submit a large or
   multi-node job until the first-use checks and module probe pass.

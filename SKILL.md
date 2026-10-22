@@ -15,9 +15,11 @@ Run `python3 scripts/doctor.py` before configuring or submitting.
 - Never run GROMACS validation on the agent workstation.
 - The core path is `scripts/gromacs_module_probe.sh`,
   `scripts/gromacs_argon_smoke.sbatch` and `scripts/compare_gromacs_energy.py`.
-- `contrib/run_openapi.py` is optional orchestration over `scnet-hpc` OpenAPI
-  for mkdir, upload, submit, wait, job details and artifact download. Users load
-  only this skill; `scnet-hpc` is an optional installed CLI dependency.
+- `contrib/run_openapi.py` is optional orchestration over the embedded OpenAPI
+  adapter for mkdir, upload, submit, wait, job details and artifact download.
+  The adapter is the scnet-hashcat reference surface; `scripts/vendor-manifest.json`
+  pins provenance and `scripts/validate.py` verifies checksums. Users load only
+  this skill; `scnet-hpc` is optional for first-use setup, SSH and deployment.
 - Use SSH only when OpenAPI cannot expose a needed fact, and then only for
   bounded diagnosis.
 - Use a unique run directory and preserve all prior results.

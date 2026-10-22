@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/lql341/scnet-hashcat",
+  "commit": "c2dc6d239ddee2c724e900cc3b5e37facd911d2e",
+  "upstream_repository": "https://github.com/lql341/scnet-hpc",
+  "upstream_commit": "0111b222087fbfe2196ca8f205aa35357e542ec8",
+  "license": "MIT",
+  "files": {
+    "scripts/scnet_credentials.py": {
+      "upstream_path": "scripts/scnet_credentials.py",
+      "sha256": "4b090670584f1380aa3fa021e075d87586dfbd98709208ff8d66b063c53cf3f5",
+      "modified": false
+    },
+    "scripts/scnet_version.py": {
+      "upstream_path": "scripts/scnet_version.py",
+      "sha256": "b9f2db2fd30782865dae6ccaaf2934052e7a09f4e789ab5e3ab4f12f00ac187b",
+      "modified": false
+    }
+  },
+  "derivatives": {
+    "scripts/scnet_lite.py": {
+      "modified": true,
+      "sha256": "82419396a08ec3cfbdebc195638582da3d33638872aacbc829f57b67f3351729",
+      "note": "Same embedded adapter as scnet-hashcat 0.2.5; upstream via scnet-hpc."
+    }
+  }
+}

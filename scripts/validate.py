@@ -6,6 +6,7 @@ Remote execution is Linux; the local agent may be Windows, macOS or Linux.
 Bash syntax checking is performed only when a bash executable is available.
 """
 
+import hashlib
 import json
 import os
 import pathlib
@@ -60,11 +61,32 @@ def check_python_syntax():
     for relative in (
         "scripts/compare_gromacs_energy.py",
         "scripts/doctor.py",
+        "scripts/scnet_lite.py",
+        "scripts/scnet_credentials.py",
+        "scripts/scnet_version.py",
         "contrib/run_openapi.py",
         "scripts/validate.py",
     ):
         path = ROOT / relative
         compile(path.read_text(encoding="utf-8"), str(path), "exec")
+
+
+def check_vendor_manifest():
+    path = ROOT / "scripts" / "vendor-manifest.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("license") != "MIT" or not data.get("commit"):
+        raise ValueError("vendor manifest is missing provenance")
+    for section in ("files", "derivatives"):
+        entries = data.get(section) or {}
+        if not entries:
+            raise ValueError("vendor manifest has no " + section)
+        for relative, meta in entries.items():
+            path = ROOT / relative
+            if not path.is_file():
+                raise ValueError("vendor file is missing: " + relative)
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            if digest != meta.get("sha256"):
+                raise ValueError("vendor checksum mismatch: " + relative)
 
 
 def check_case_files():
@@ -110,6 +132,7 @@ def main():
         check_python_syntax()
         check_case_files()
         check_catalog()
+        check_vendor_manifest()
         scan_private_paths()
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         print("repository validation failed: {}".format(exc), file=sys.stderr)

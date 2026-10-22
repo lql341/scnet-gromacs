@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0 (2026-10-21)
+
+- Unify the internal OpenAPI adapter with the scnet-hashcat reference adapter;
+  normal GROMACS runs no longer require an installed scnet-hpc CLI.
+- Add a vendor manifest and checksum validation for the embedded adapter.
+- Add first-use `doctor.py` with human and JSON status, shared credential-store
+  detection and actionable next steps.
+- Extend CI to Windows and macOS for the cross-platform validator.
+
 ## 0.9.5 (2026-10-21)
 
 - Add a first-use reference and local read-only `doctor.py` for new SCNet
