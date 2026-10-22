@@ -1,8 +1,8 @@
 ---
 name: scnet-gromacs
 version: 0.10.3
-display_name: "SCNet GROMACS 验证"
-display_name_en: "SCNet GROMACS Validation"
+display_name: "SCNet GROMACS"
+display_name_en: "SCNet GROMACS"
 description: Validate GROMACS modules on SCNet CPU and Hygon DCU/HIP compute nodes with a deterministic CPU oracle, explicit device evidence, CPU/HIP tolerance checks and scheduler-aware results.
 description_zh: "在 SCNet CPU 和海光 DCU/HIP 计算节点上验证 GROMACS module：CPU oracle、设备证据、CPU/HIP 容差比较和调度证据。"
 description_en: "Validate GROMACS modules on SCNet CPU and Hygon DCU/HIP nodes with CPU oracle, device evidence, CPU/HIP tolerance checks and scheduler-aware results."
