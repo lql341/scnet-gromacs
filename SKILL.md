@@ -14,7 +14,8 @@ SCNet. Read [references/validation.md](references/validation.md) first.
 - The core path is `scripts/gromacs_module_probe.sh`,
   `scripts/gromacs_argon_smoke.sbatch` and `scripts/compare_gromacs_energy.py`.
 - `contrib/run_openapi.py` is optional orchestration over `scnet-hpc` OpenAPI
-  for mkdir, upload, submit, wait, job details and artifact download.
+  for mkdir, upload, submit, wait, job details and artifact download. Users load
+  only this skill; `scnet-hpc` is an optional installed CLI dependency.
 - Use SSH only when OpenAPI cannot expose a needed fact, and then only for
   bounded diagnosis.
 - Use a unique run directory and preserve all prior results.

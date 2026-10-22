@@ -7,6 +7,7 @@ Bash syntax checking is performed only when a bash executable is available.
 """
 
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -36,6 +37,12 @@ SKIP_SCAN = {
 
 
 def check_shell_syntax():
+    if os.name == "nt":
+        print(
+            "Windows host: skipped bash syntax check; remote execution uses Linux bash",
+            file=sys.stderr,
+        )
+        return
     bash = shutil.which("bash")
     if not bash:
         print(

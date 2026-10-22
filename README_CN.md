@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.9.3
+当前版本：0.9.4
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -14,7 +14,7 @@ case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检
 
 ## 一句话让 agent 安装
 
-> 使用 `$skill-installer` 从 GitHub 仓库 `lql341/scnet-gromacs` 根目录（path `.`、ref `main`）安装 `scnet-gromacs`，不覆盖已有目录，然后运行 `scripts/validate.sh`；安装阶段不要提交集群作业。
+> 使用 `$skill-installer` 从 GitHub 仓库 `lql341/scnet-gromacs` 根目录（path `.`、ref `main`）安装 `scnet-gromacs`，不覆盖已有目录，然后运行 `python3 scripts/validate.py`；安装阶段不要提交集群作业。
 
 ## 验证内容
 

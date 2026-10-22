@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.9.3
+Current release: 0.9.4
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -16,7 +16,7 @@ rebuilding the software. See the [official 2026.4 release notes](https://manual.
 
 ## One-sentence agent installation
 
-> Use `$skill-installer` to install `scnet-gromacs` from the root of GitHub repository `lql341/scnet-gromacs` (path `.`, ref `main`), name it `scnet-gromacs`, do not overwrite an existing destination, then run `scripts/validate.sh`; do not submit a cluster job during installation.
+> Use `$skill-installer` to install `scnet-gromacs` from the root of GitHub repository `lql341/scnet-gromacs` (path `.`, ref `main`), name it `scnet-gromacs`, do not overwrite an existing destination, then run `python3 scripts/validate.py`; do not submit a cluster job during installation.
 
 ## What this validates
 

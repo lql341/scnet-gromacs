@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.4 (2026-10-21)
+
+- Clarify single-skill entry: users load only scnet-gromacs; scnet-hpc is an
+  optional installed CLI dependency, not a second skill.
+- Run the cross-platform validator on Ubuntu, Windows and macOS in CI.
+- Use `python3 scripts/validate.py` in the installation prompt.
+
 ## 0.9.3 (2026-10-21)
 
 - Remove the legacy plain/PMPI 2026.3 module aliases from the reference account;
