@@ -95,13 +95,18 @@ def check_vendor_manifest():
 
 
 def check_case_files():
+    for case, name, flat in (
+        ("argon8", "argon.gro", "argon8.gro"),
+        ("argon8", "topol.top", "argon8.top"),
+        ("argon8", "md.mdp", "argon8.mdp"),
+        ("ionpair_pme", "ionpair.gro", "ionpair_pme.gro"),
+        ("ionpair_pme", "topol.top", "ionpair_pme.top"),
+        ("ionpair_pme", "md.mdp", "ionpair_pme.mdp"),
+    ):
+        candidates = (ROOT / "cases" / case / name, ROOT / "cases" / flat)
+        if not any(path.is_file() and path.stat().st_size for path in candidates):
+            raise ValueError("missing or empty case file: {}/{}".format(case, name))
     for relative in (
-        "cases/argon8/argon.gro",
-        "cases/argon8/topol.top",
-        "cases/argon8/md.mdp",
-        "cases/ionpair_pme/ionpair.gro",
-        "cases/ionpair_pme/topol.top",
-        "cases/ionpair_pme/md.mdp",
         "benchmarks/catalog.json",
         "benchmarks/observations.md",
         "references/version-coverage.md",

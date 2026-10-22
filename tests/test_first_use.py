@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -298,6 +299,25 @@ class DoctorTests(unittest.TestCase):
             online, rc = doctor._online_status(status, None, None)
         self.assertFalse(online["ok"])
         self.assertNotEqual(rc, 0)
+
+
+class CaseLayoutTests(unittest.TestCase):
+    def test_directory_and_flat_case_layouts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            case_dir = root / "cases" / "argon8"
+            case_dir.mkdir(parents=True)
+            for name in ("argon.gro", "md.mdp", "topol.top"):
+                (case_dir / name).write_text("x")
+            nested = dict((remote, source.name) for source, remote in run_openapi.case_sources(root, "argon8"))
+            self.assertEqual(nested, {"argon.gro": "argon.gro", "md.mdp": "md.mdp", "topol.top": "topol.top"})
+            shutil.rmtree(root / "cases")
+            flat = root / "cases"
+            flat.mkdir()
+            for name in ("argon8.gro", "argon8.mdp", "argon8.top"):
+                (flat / name).write_text("x")
+            resolved = dict((remote, source.name) for source, remote in run_openapi.case_sources(root, "argon8"))
+            self.assertEqual(resolved, {"argon.gro": "argon8.gro", "md.mdp": "argon8.mdp", "topol.top": "argon8.top"})
 
 
 class RunRootTests(unittest.TestCase):

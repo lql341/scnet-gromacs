@@ -18,8 +18,10 @@ Examples:
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path, PurePosixPath
 
@@ -217,15 +219,41 @@ def ensure_unique_run_root(scnet, run_root):
         )
 
 
-def upload_tree(scnet, local_scripts, local_case, remote_scripts, remote_case):
+def case_sources(root, case):
+    """Return (local source, remote filename) pairs for a bundled case.
+
+    The repository layout is ``cases/<case>/<file>``. The WorkBuddy package
+    uses a flat ``cases/<case>.<ext>`` layout to satisfy its two-level import
+    limit. Both layouts are accepted here.
+    """
+    directory = root / "cases" / case
+    if directory.is_dir():
+        return [
+            (path, path.name)
+            for path in sorted(directory.iterdir())
+            if path.is_file()
+        ]
+    mapping = {
+        CASES[case]["gro"]: root / "cases" / (case + ".gro"),
+        "md.mdp": root / "cases" / (case + ".mdp"),
+        "topol.top": root / "cases" / (case + ".top"),
+    }
+    if all(path.is_file() for path in mapping.values()):
+        return [(path, name) for name, path in mapping.items()]
+    return []
+
+
+def upload_tree(scnet, local_scripts, case_files, remote_scripts, remote_case):
     for name in SMOKE_SCRIPTS:
         source = local_scripts / name
         if not source.is_file():
             raise RunnerError("missing local script: {}".format(source))
         scnet.run("upload", str(source), str(remote_scripts))
-    for source in sorted(local_case.iterdir()):
-        if source.is_file():
-            scnet.run("upload", str(source), str(remote_case))
+    with tempfile.TemporaryDirectory() as tmp:
+        for source, remote_name in case_files:
+            staged = Path(tmp) / remote_name
+            shutil.copyfile(source, staged)
+            scnet.run("upload", str(staged), str(remote_case))
 
 
 def build_command(case, mode, run_root, remote_scripts, remote_case, settings):
@@ -514,9 +542,11 @@ def main(argv=None):
     try:
         root = repo_root()
         local_scripts = root / "scripts"
-        local_case = root / "cases" / args.case
-        if not local_case.is_dir():
-            raise RunnerError("local case directory is missing: {}".format(local_case))
+        case_files = case_sources(root, args.case)
+        if not case_files:
+            raise RunnerError(
+                "local case files are missing for {} under cases/".format(args.case)
+            )
 
         try:
             profile_path = resolve_profile(
@@ -682,11 +712,7 @@ def main(argv=None):
             )
 
         uploads = [str(local_scripts / name) for name in SMOKE_SCRIPTS]
-        uploads.extend(
-            str(source)
-            for source in sorted(local_case.iterdir())
-            if source.is_file()
-        )
+        uploads.extend(str(source) for source, _ in case_files)
         if args.dry_run:
             plan = {
                 "dry_run": True,
@@ -729,7 +755,7 @@ def main(argv=None):
         for path in (remote_scripts, remote_case):
             scnet.run("mkdir", "--parents", str(path))
         upload_tree(
-            scnet, local_scripts, local_case, remote_scripts, remote_case
+            scnet, local_scripts, case_files, remote_scripts, remote_case
         )
         download_dir.mkdir(parents=True)
 
