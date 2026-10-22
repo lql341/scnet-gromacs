@@ -8,15 +8,16 @@ an installed scnet-hpc CLI for normal OpenAPI runs. Use scnet-hpc only for
 first-use setup, SSH, deployment or broader diagnosis.
 
 Examples:
-    python3 contrib/run_openapi.py --cluster kseshell \
+    python3 contrib/run_openapi.py --profile clusters/<profile>.conf \
       --run-root /absolute/new/run-root --case argon8 --mode both
 
-    python3 contrib/run_openapi.py --cluster kseshell \
+    python3 contrib/run_openapi.py --region <region> --cpu-queue <queue> \
       --run-root /absolute/new/run-root --case ionpair_pme --mode both
 """
 
 import argparse
-import shlex
+import json
+import os
 import subprocess
 import sys
 import time
@@ -25,6 +26,7 @@ from pathlib import Path, PurePosixPath
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
+from gromacs_profile import ProfileError, load_profile, resolve_profile
 from scnet_lite import Client, ClientError, default_region
 
 CASES = {
@@ -77,28 +79,6 @@ def remote_root(value):
     if not text.startswith("/"):
         raise RunnerError("--run-root must be an absolute POSIX remote path")
     return PurePosixPath(text)
-
-
-def load_profile(path):
-    values = {}
-    for raw in path.read_text().splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[len("export ") :].lstrip()
-        if "=" not in line:
-            continue
-        key, _, raw_value = line.partition("=")
-        key = key.strip()
-        try:
-            parts = shlex.split(raw_value, comments=True, posix=True)
-        except ValueError:
-            continue
-        if not key or not parts:
-            continue
-        values[key] = " ".join(parts)
-    return values
 
 
 class Scnet:
@@ -195,6 +175,20 @@ def remote_children(scnet, path):
     }
 
 
+def _is_not_found_error(exc):
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "404",
+            "not found",
+            "does not exist",
+            "no such file",
+            "不存在",
+        )
+    )
+
+
 def ensure_unique_run_root(scnet, run_root):
     if not str(run_root).startswith("/"):
         raise RunnerError("--run-root must be an absolute POSIX path")
@@ -203,9 +197,13 @@ def ensure_unique_run_root(scnet, run_root):
     parent = run_root.parent
     try:
         names = remote_children(scnet, parent)
-    except RunnerError:
+    except RunnerError as exc:
+        if not _is_not_found_error(exc):
+            raise
         scnet.run("mkdir", "--parents", str(parent))
-        names = {}
+        # Do not trust the mkdir result alone: re-read the parent and fail on
+        # any error rather than treating an unknown state as an empty directory.
+        names = remote_children(scnet, parent)
     if run_root.name in names:
         raise RunnerError(
             "remote run root already exists; choose a new directory: {}".format(
@@ -461,7 +459,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Run GROMACS smoke cases through the embedded OpenAPI adapter."
     )
-    parser.add_argument("--cluster", required=True, help="scnet-hpc profile name")
+    parser.add_argument(
+        "--cluster",
+        help="local cluster profile name (clusters/<name>.conf)",
+    )
+    parser.add_argument(
+        "--region",
+        help="explicit OpenAPI region; overrides OPENAPI_REGION_ID in the profile",
+    )
     parser.add_argument(
         "--run-root", required=True, type=Path, help="new absolute remote run root"
     )
@@ -494,6 +499,11 @@ def main(argv=None):
     parser.add_argument("--wait-timeout", type=int, default=600)
     parser.add_argument("--interval", type=int, default=15)
     parser.add_argument("--skip-preflight", action="store_true")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the offline plan; do not create a client or touch the remote",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -503,31 +513,68 @@ def main(argv=None):
         if not local_case.is_dir():
             raise RunnerError("local case directory is missing: {}".format(local_case))
 
-        profile = {}
-        profile_path = args.profile.expanduser() if args.profile else None
-        if profile_path is None:
-            candidate = root / "clusters" / "{}.conf".format(args.cluster)
-            if candidate.is_file():
-                profile_path = candidate
-        if profile_path is not None:
-            if not profile_path.is_file():
-                raise RunnerError("profile not found: {}".format(profile_path))
-            profile = load_profile(profile_path)
+        try:
+            profile_path = resolve_profile(
+                root,
+                cluster=args.cluster,
+                explicit=args.profile,
+                env=os.environ.get("GROMACS_PROFILE"),
+            )
+        except ProfileError as exc:
+            raise RunnerError(str(exc)) from exc
+        try:
+            profile = load_profile(profile_path) if profile_path else {}
+        except ProfileError as exc:
+            raise RunnerError(str(exc)) from exc
 
-        cpu_queue = args.cpu_queue or profile.get("CPU_PARTITION")
-        hip_queue = args.hip_queue or profile.get("DCU_PARTITION")
+        region = (
+            args.region
+            or profile.get("OPENAPI_REGION_ID")
+            or os.environ.get("SCNET_OPENAPI_REGION_ID")
+        )
+        if not region:
+            raise RunnerError(
+                "no OpenAPI region configured; pass --region or set "
+                "OPENAPI_REGION_ID in the profile"
+            )
+
+        cpu_queue = (
+            args.cpu_queue
+            or profile.get("CPU_PARTITION")
+            or os.environ.get("GROMACS_CPU_QUEUE")
+        )
+        hip_queue = (
+            args.hip_queue
+            or profile.get("DCU_PARTITION")
+            or os.environ.get("GROMACS_HIP_QUEUE")
+        )
         cpu_module = (
             args.cpu_module
             if args.cpu_module is not None
-            else profile.get("GROMACS_MODULE", "")
+            else (
+                profile.get("GROMACS_MODULE")
+                or os.environ.get("GROMACS_MODULE", "")
+            )
         )
         hip_module = (
             args.hip_module
             if args.hip_module is not None
-            else profile.get("GROMACS_GPU_MODULE", "")
+            else (
+                profile.get("GROMACS_GPU_MODULE")
+                or os.environ.get("GROMACS_MODULE", "")
+            )
         )
-        binary = args.binary or profile.get("GROMACS_BINARY") or "gmx_mpi"
-        env_script = args.env_script or profile.get("GROMACS_ENV_SCRIPT", "")
+        binary = (
+            args.binary
+            or profile.get("GROMACS_BINARY")
+            or os.environ.get("GROMACS_BINARY")
+            or "gmx_mpi"
+        )
+        env_script = (
+            args.env_script
+            or profile.get("GROMACS_ENV_SCRIPT", "")
+            or os.environ.get("GROMACS_ENV_SCRIPT", "")
+        )
         if not hip_module:
             hip_module = cpu_module
         if not cpu_module:
@@ -627,9 +674,33 @@ def main(argv=None):
         if args.wait_timeout < 1:
             raise RunnerError("--wait-timeout must be positive")
 
-        scnet = Scnet(profile.get("OPENAPI_REGION_ID"))
-        run_root = remote_root(args.run_root.expanduser())
+        settings_by_mode = {}
+        for mode in modes:
+            settings_by_mode[mode] = {
+                "queue": cpu_queue if mode == "cpu" else hip_queue,
+                "module": cpu_module if mode == "cpu" else hip_module,
+                "binary": binary,
+                "env_script": env_script,
+                "gpu_arch": gpu_arch,
+                "expect_version": expect_version,
+                "module_path": module_path,
+                "nodes": nodes,
+                "ranks": ranks,
+                "ranks_per_node": ranks_per_node,
+                "omp_threads": omp_threads,
+                "launcher": launcher,
+                "launcher_args": launcher_args,
+                "npme": npme,
+                "mpi_env": mpi_env,
+                "force_gpu_aware": force_gpu_aware,
+                "require_gpu_aware": require_gpu_aware,
+                "cpus": cpus,
+                "dcus": dcus,
+                "scheduler_options": scheduler_options,
+                "walltime": walltime,
+            }
 
+        run_root = remote_root(args.run_root.expanduser())
         download_dir = args.download_dir
         if download_dir is None:
             download_dir = root / "out" / run_root.name
@@ -640,6 +711,37 @@ def main(argv=None):
                     download_dir
                 )
             )
+
+        uploads = [str(local_scripts / name) for name in SMOKE_SCRIPTS]
+        uploads.extend(
+            str(source)
+            for source in sorted(local_case.iterdir())
+            if source.is_file()
+        )
+        if args.dry_run:
+            plan = {
+                "dry_run": True,
+                "case": args.case,
+                "modes": list(modes),
+                "region": region,
+                "profile": str(profile_path) if profile_path else None,
+                "run_root": str(run_root),
+                "download_dir": str(download_dir),
+                "resources": {
+                    "nodes": nodes,
+                    "ranks": ranks,
+                    "ranks_per_node": ranks_per_node,
+                    "omp_threads": omp_threads,
+                    "cpus": cpus,
+                    "dcus": dcus,
+                },
+                "modes_config": settings_by_mode,
+                "uploads": uploads,
+            }
+            print(json.dumps(plan, indent=2, ensure_ascii=False))
+            return 0
+
+        scnet = Scnet(region)
 
         if not args.skip_preflight:
             preflight_queues = set()
@@ -665,29 +767,7 @@ def main(argv=None):
         jobs = []
         try:
             for mode in modes:
-                settings = {
-                    "queue": cpu_queue if mode == "cpu" else hip_queue,
-                    "module": cpu_module if mode == "cpu" else hip_module,
-                    "binary": binary,
-                    "env_script": env_script,
-                    "gpu_arch": gpu_arch,
-                    "expect_version": expect_version,
-                    "module_path": module_path,
-                    "nodes": nodes,
-                    "ranks": ranks,
-                    "ranks_per_node": ranks_per_node,
-                    "omp_threads": omp_threads,
-                    "launcher": launcher,
-                    "launcher_args": launcher_args,
-                    "npme": npme,
-                    "mpi_env": mpi_env,
-                    "force_gpu_aware": force_gpu_aware,
-                    "require_gpu_aware": require_gpu_aware,
-                    "cpus": cpus,
-                    "dcus": dcus,
-                    "scheduler_options": scheduler_options,
-                    "walltime": walltime,
-                }
+                settings = settings_by_mode[mode]
                 job_id = submit_mode(
                     scnet,
                     args.case,

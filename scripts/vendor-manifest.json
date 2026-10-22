@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/lql341/scnet-hashcat",
-  "commit": "c2dc6d239ddee2c724e900cc3b5e37facd911d2e",
+  "commit": "2f44b1b0fc980f6a159bd14d2cd5dfe5398f0be2",
   "upstream_repository": "https://github.com/lql341/scnet-hpc",
   "upstream_commit": "0111b222087fbfe2196ca8f205aa35357e542ec8",
   "license": "MIT",
@@ -20,7 +20,7 @@
     "scripts/scnet_lite.py": {
       "modified": true,
       "sha256": "82419396a08ec3cfbdebc195638582da3d33638872aacbc829f57b67f3351729",
-      "note": "Same embedded adapter as scnet-hashcat 0.2.5; upstream via scnet-hpc."
+      "note": "Same embedded adapter as scnet-hashcat 0.2.6; upstream via scnet-hpc."
     }
   }
 }

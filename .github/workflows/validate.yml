@@ -25,3 +25,6 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python scripts/validate.py
+      - name: Verify pinned adapter
+        if: runner.os == 'Linux'
+        run: python scripts/check_adapter.py --online

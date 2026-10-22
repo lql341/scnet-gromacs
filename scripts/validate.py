@@ -61,6 +61,9 @@ def check_python_syntax():
     for relative in (
         "scripts/compare_gromacs_energy.py",
         "scripts/doctor.py",
+        "scripts/gromacs_profile.py",
+        "scripts/check_adapter.py",
+        "tests/test_first_use.py",
         "scripts/scnet_lite.py",
         "scripts/scnet_credentials.py",
         "scripts/scnet_version.py",

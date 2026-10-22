@@ -19,8 +19,12 @@ local download directory. It does not implement a separate transport or
 credential stack, and does not require an installed scnet-hpc CLI.
 
 It is deliberately outside `scripts/` so the core compute-node path stays small
-and stable. If `scnet-hpc` changes its CLI, update this wrapper only; the
-compute-node scripts and their evidence contract do not change.
+and stable. If the pinned adapter changes, update the vendored files and vendor
+manifest; the compute-node scripts and their evidence contract do not change.
+A named `--cluster` profile must exist. Missing profiles, permission failures
+while checking the remote run root, and unknown directory state are hard errors,
+not silent fallbacks. `--dry-run` prints the resolved plan without creating a
+client or touching the remote.
 
 The wrapper is Python 3.8+ standard library and runs on Windows, macOS or Linux.
 Remote paths are POSIX; `--run-root` is normalized to POSIX even from a Windows

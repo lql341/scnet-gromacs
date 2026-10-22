@@ -36,8 +36,10 @@ HIP 模式记录设备可见性、`GMX_GPU`、HIP runtime 和目标架构。可�
 `contrib/run_openapi.py` 是核心计算节点脚本之上的可选编排。它使用内嵌
 OpenAPI adapter（scnet-hashcat 参考实现，源自 scnet-hpc），完成远端 mkdir、
 upload、submit、限时 wait、详细 job 检查和显式 artifact 下载；不使用 SSH，
-并拒绝复用已存在的远端 run root 或本地下载目录。`scnet-hpc` 只用于首次配置、
-SSH 和部署，不是运行时 skill 依赖。
+并拒绝复用已存在的远端 run root 或本地下载目录。命名 `--cluster` 必须解析到
+profile；目录状态未知或不可读时直接失败。`--dry-run` 不创建 client、不访问远端，
+只输出解析后的计划。`scnet-hpc` 只用于首次配置、SSH 和部署，不是运行时 skill
+依赖。
 
 runner 读取从 `clusters/_template.conf` 复制的私有 profile，或接受显式的队列/
 module/资源参数。profile 中的 `GPU_ARCH` 会传给 HIP 作业作为可选架构门禁，但不

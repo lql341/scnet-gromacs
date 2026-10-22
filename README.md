@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.10.0
+Current release: 0.10.1
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -83,11 +83,13 @@ Users who have not enabled SCNet compute should read
 [references/first-use.md](references/first-use.md) first. Check local readiness:
 
 ```bash
-python3 scripts/doctor.py
+python3 scripts/doctor.py --profile clusters/<profile>.conf --json
+python3 scripts/doctor.py --profile clusters/<profile>.conf --require-openapi
 ```
 
-`doctor.py` is local and read-only; `--online` delegates only to the read-only
-`scnet-hpc doctor`.
+`doctor.py` is local and read-only. It reports credentials, local region/queue
+configuration and remote verification separately. `openapi_ready` means local
+prerequisites only; `--online` adds a read-only `scnet-hpc doctor` result.
 
 ## Workflow
 
@@ -165,24 +167,25 @@ needed, `SCHEDULER_OPTIONS`; the runner balances the allocation and passes
 ## Optional OpenAPI runner
 
 The core validation path is still the three compute-node scripts. Optional
-orchestration lives in `contrib/run_openapi.py`; it calls the installed
-`scnet-hpc` CLI with `--backend openapi` for remote directory creation, script
-and case upload, submission, bounded wait, job-detail checking and artifact
-download. You can also drive the same scripts directly with `scnet-hpc` without
-this wrapper. The wrapper does not use SSH and does not implement a second
-credential or transport layer. It looks for `scnet-hpc` in the sibling
-`../scnet-hpc` directory first, which matches a shared `skills/` tree; then it
-falls back to `SCNET_HPC_ROOT` and agent-specific skill directories.
+orchestration lives in `contrib/run_openapi.py`; it uses the embedded OpenAPI
+adapter for remote directory creation, script and case upload, submission,
+bounded wait, job-detail checking and artifact download. You can also drive the
+same scripts directly with `scnet-hpc` without this wrapper. The wrapper does
+not use SSH and does not implement a second credential or transport layer.
 
 ```bash
 python3 contrib/run_openapi.py \
-  --cluster <scnet-hpc-profile> \
-  --profile clusters/<scnet-hpc-profile>.conf \
+  --profile clusters/<profile>.conf \
   --run-root /absolute/new/remote/run-root \
   --case ionpair_pme \
   --mode both \
   --download-dir ./out/gromacs-pme
 ```
+
+A named `--cluster` profile must exist; the runner never silently falls back to
+a shared default region. Use `--region` plus explicit queues when no profile is
+available. `--dry-run` prints the resolved plan without creating a client or
+touching the remote.
 
 `--mode both` submits one CPU job and one HIP job, waits for both, downloads
 `result.txt`, version, checksum, energy and run logs, and applies

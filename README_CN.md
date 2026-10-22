@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.10.0
+当前版本：0.10.1
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -72,11 +72,13 @@ GROMACS_ENV_SCRIPT=/absolute/path/to/env.sh
 本地只读检查：
 
 ```bash
-python3 scripts/doctor.py
+python3 scripts/doctor.py --profile clusters/<profile>.conf --json
+python3 scripts/doctor.py --profile clusters/<profile>.conf --require-openapi
 ```
 
-`doctor.py` 不读取密钥、不提交作业；`--online` 只委托只读的
-`scnet-hpc doctor`。
+`doctor.py` 不读取密钥、不提交作业。它分别报告凭证、本地 region/queue 配置和
+远端验证状态；`openapi_ready` 只表示本地前置条件，`--online` 才附加只读的
+`scnet-hpc doctor` 结果。
 
 ## 工作流
 
@@ -168,21 +170,23 @@ mpirun --hostfile hostfile --map-by ppr:2:node --bind-to none   --mca pml ob1 --
 ## 可选的 OpenAPI runner
 
 核心验证路径仍然是三个计算节点脚本。可选编排放在 `contrib/run_openapi.py`；它
-通过已安装的 `scnet-hpc` CLI 的 `--backend openapi` 完成远端目录创建、脚本/case
-上传、提交、限时等待、作业详情检查和结果下载。也可以不使用该包装脚本，直接用
-`scnet-hpc` 驱动同一组脚本。包装脚本不使用 SSH，也不实现第二套凭证或传输层。它优先在同级 `../scnet-hpc`
-目录查找 `scnet-hpc`，与共享 `skills/` 目录布局一致；然后回退到
-`SCNET_HPC_ROOT` 和各个智能体的 skill 目录。
+使用从 scnet-hashcat 参考实现复制、源自 scnet-hpc 的内嵌 OpenAPI adapter，完成
+远端目录创建、脚本/case 上传、提交、限时等待、作业详情检查和结果下载。用户只
+加载 `scnet-gromacs`；`scnet-hpc` 只用于首次配置、SSH 和部署，不是需要加载的
+第二个 skill。包装脚本不使用 SSH，也不实现另一套凭证或传输栈。
 
 ```bash
 python3 contrib/run_openapi.py \
-  --cluster <scnet-hpc-profile> \
-  --profile clusters/<scnet-hpc-profile>.conf \
+  --profile clusters/<profile>.conf \
   --run-root /absolute/new/remote/run-root \
   --case ionpair_pme \
   --mode both \
   --download-dir ./out/gromacs-pme
 ```
+
+命名 `--cluster` 必须能找到对应 profile；找不到时直接报错，不会静默回退到共享
+默认 region。没有 profile 时用 `--region` 加显式队列。`--dry-run` 只输出解析后
+的计划，不创建 client，也不访问远端。
 
 `--mode both` 提交一个 CPU 作业和一个 HIP 作业，等待两者结束，下载
 `result.txt`、版本、checksum、能量和运行日志，并调用

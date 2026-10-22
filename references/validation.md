@@ -43,8 +43,11 @@ enough.
 scripts. It uses the embedded OpenAPI adapter (the scnet-hashcat reference,
 derived from scnet-hpc) for remote mkdir, upload, submit, bounded wait, detailed
 job check and explicit artifact download. It does not use SSH, and it refuses to
-reuse an existing remote run root or local download directory. `scnet-hpc` is
-optional for first-use setup, SSH and deployment, not a runtime skill dependency.
+reuse an existing remote run root or local download directory. A named
+`--cluster` must resolve to a profile; unknown or unreadable directory state is
+fatal. `--dry-run` prints the resolved plan without a client or remote call.
+`scnet-hpc` is optional for first-use setup, SSH and deployment, not a runtime
+skill dependency.
 
 The runner reads a private profile copied from `clusters/_template.conf` or
 accepts explicit queue/module/resource arguments. A profile `GPU_ARCH` value is

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.1 (2026-10-22)
+
+- Separate doctor readiness into credentials, local region/queue configuration
+  and remote verification; a dummy credential no longer marks the runner ready.
+- Share profile parsing between the doctor and runner; support explicit
+  `--region`/queue overrides and fail on a missing named cluster profile.
+- Fail closed when remote directory lookup returns anything other than a true
+  not-found result; re-read the parent after mkdir.
+- Make `--online --json` emit one JSON envelope instead of mixed JSON/text.
+- Add offline `--dry-run` planning and regression tests for readiness, directory
+  errors, profile fallback and dry-run behavior.
+
 ## 0.10.0 (2026-10-21)
 
 - Unify the internal OpenAPI adapter with the scnet-hashcat reference adapter;

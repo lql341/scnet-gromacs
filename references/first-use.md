@@ -38,13 +38,33 @@ write them into `clusters/*.conf`.
 ## 3. Local readiness
 
 ```bash
-python3 scripts/doctor.py
-python3 scripts/doctor.py --require-openapi   # nonzero unless runner is ready
-python3 scripts/doctor.py --online --cluster <profile>   # scnet-hpc read-only doctor
+# Preferred: use the same profile as the runner.
+python3 scripts/doctor.py --profile clusters/<profile>.conf --json
+
+# Explicit values without a profile.
+python3 scripts/doctor.py --region <region> --cpu-queue <queue> --json
+
+# Fail unless credentials and local region/queue configuration are present.
+python3 scripts/doctor.py --profile clusters/<profile>.conf --require-openapi
+
+# Optional online check; requires an installed scnet-hpc.
+python3 scripts/doctor.py --profile clusters/<profile>.conf --online --cluster <hpc-profile> --json
+
+# Offline plan; no client, credentials or remote calls.
+python3 contrib/run_openapi.py --profile clusters/<profile>.conf \
+  --run-root /absolute/new/remote/run-root --case argon8 --mode cpu --dry-run
 ```
 
-`doctor.py` never reads secret values or submits jobs. `--online` delegates only
-to the read-only `scnet-hpc doctor`.
+`doctor.py` never reads secret values or submits jobs. It reports three separate
+states:
+
+- `credentials`: present or missing;
+- `configuration`: region and CPU/DCU queue declared or incomplete;
+- `remote`: `unknown` offline, `verified` only after a successful `--online`
+  read-only `scnet-hpc doctor`.
+
+`openapi_ready` and `--require-openapi` cover local prerequisites only. They do
+not prove account activation, module deployment or device availability.
 
 ## 4. GROMACS module
 
@@ -63,7 +83,8 @@ to the read-only `scnet-hpc doctor`.
 
 - `contrib/run_openapi.py` is optional and uses the embedded OpenAPI adapter.
   Users load only `scnet-gromacs`; `scnet-hpc` is optional for setup/SSH and is
-  not a second skill to load.
+  not a second skill to load. A named `--cluster` profile must exist; the runner
+  never silently falls back to a shared default region.
 - If `scnet-hpc` is unavailable, the embedded adapter still supports normal
   OpenAPI runs; the core scripts can also be driven by a site scheduler client.
 - Start with a CPU smoke, then HIP/PME, then multi-rank. Do not submit a large or

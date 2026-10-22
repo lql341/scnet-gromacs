@@ -8,7 +8,9 @@ description: Validate GROMACS modules on SCNet CPU and Hygon DCU/HIP compute nod
 Use this skill for GROMACS module validation and small CPU/HIP smoke runs on
 SCNet. Read [references/validation.md](references/validation.md) and, for a
 first-time SCNet user, [references/first-use.md](references/first-use.md).
-Run `python3 scripts/doctor.py` before configuring or submitting.
+Run `python3 scripts/doctor.py --profile clusters/<profile>.conf` before
+configuring or submitting; `--json` is machine-readable and `--dry-run` on the
+runner prints the plan without touching the remote.
 
 ## Rules
 
