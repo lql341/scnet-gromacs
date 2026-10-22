@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.8.1
+当前版本：0.9.0
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -41,15 +41,20 @@ bundled case 只是 smoke test。它们覆盖部分 PME 分解、GPU-aware MPI �
 本 skill 不打包 GROMACS。空白 SCNet 账户必须提供站点 module 或自己的构建。
 下表的“覆盖”表示在参考环境跑通过，不代表每个账户/集群都自动可用。
 
-| GROMACS | CPU | HIP | PME | 多 rank PME | 多 GPU | 多节点 | PMPI |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026.3 | 是 | 是 | 是 | 是 | 是 | 是 | 是 |
-| 2026.4 | 是 | 是 | 是 | 是 | 是 | 是 | 是 |
+| GROMACS | CPU/HIP | PME | 多 rank PME | 多 GPU | 多节点 |
+| --- | --- | --- | --- | --- | --- |
+| 2026.3 | 是 | 是 | 是 | 是 | 是 |
+| 2026.4 | 是 | 是 | 是 | 是 | 是 |
 
-2026.4 参考构建来自官方源码，通过用户级参考 module 验证；2026.4 PMPI 变体
-已验证单节点和双节点/4 rank/4 GPU。它们只是用户级 module，不做系统级发布；
-仓库不打包它们，空白账户必须自行构建或获取。依据、多节点/UCX 发现和新账户
-最低证据要求见
+标准是**每个应用版本一个用户级 module**，例如 `gromacs/2026.4`。后端/MPI
+变体是构建/profile 选择，不拆成独立 module 名。2026.4 规范参考 module 使用
+官方源码 + OpenMPI 5 + UCX + HIP。
+
+PMPI 是可选兼容 profile，不是 module；已验证单节点和双节点/4 rank/4 GPU，
+但慢于 OpenMPI 5 UCX 路径，只在必须使用平台 MPI 时使用。
+
+这些只是用户级 module，不做系统级发布；仓库不打包它们，空白账户必须自行
+构建或获取。依据、多节点/UCX 发现和新账户最低证据要求见
 [references/version-coverage.md](references/version-coverage.md)。
 
 用户自有构建可以不使用 module：
@@ -118,11 +123,15 @@ DCU。PME case 设置 `GROMACS_NPME=1` 可请求独立 PME rank。
   UCX 通过并快于 OB1/TCP。OB1 是 fallback，不是通用最佳实践；transport/HCA
   选择应保持站点可配置。
 
+HCOLL 在参考 OpenMPI 5 module 中已关闭。GROMACS 多 rank 尤其 GPU-aware 实验
+应保持关闭（`OMPI_MCA_coll=^hcoll`）；ROCm 路径在关闭 HCOLL 前会在 handler
+setup 阶段失败。
+
 这些是参考站点观察，不是通用 launcher 结论。跨节点运行设置 `NODES`、
 `MPI_RANKS`、`MPI_RANKS_PER_NODE`，必要时设置 `SCHEDULER_OPTIONS`；runner 会
 平衡分配并向 `srun` 传 `--ntasks-per-node`。
 
-PMPI 参考 module 的多 rank 运行使用 `mpirun` 加 OB1 transport 覆盖，因为平台
+PMPI 兼容 profile 的多 rank 运行使用 `mpirun` 加 OB1 transport 覆盖，因为平台
 UCX 路径可能在 mdrun 前失败：
 
 ```text
@@ -235,8 +244,9 @@ smoke 记录的能量列都是有限数值。PME 运行还比较 `Coulomb (SR)`�
 在 mdrun 前失败。OB1 是 fallback，不是默认。强制 GPU-aware MPI 明显变慢；
 没有实测不要启用。
 
-更大的 ADH benchmark，134,177 原子，200 步：1 GPU 21.1 ns/day，2 GPU 22.7，
-4 GPU 28.7，双节点/4 GPU 27.8。扩展性好于微 case，但仍为次线性；不是生产
+更大的 ADH benchmark，134,177 原子，200 步：1 GPU 21.1 ns/day，2 GPU 22.7
+（1.07x），4 GPU 28.7（1.36x），双节点/4 GPU 27.8。加速比不是线性；对
+134k 原子体系，通信和 PME 分解占主导，这是预期结果，不是 bug，也不是生产
 benchmark。
 
 还测试了启用 ROCm 的 UCX/OpenMPI 构建。GROMACS 能检测到 GPU-aware MPI

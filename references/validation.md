@@ -2,15 +2,15 @@
 
 ## Target facts
 
-The current Kunshan module inventory includes GROMACS 2026.3 variants:
+The reference inventory follows one user-level module per application version:
+`gromacs/2026.3` and `gromacs/2026.4`. Backend, MPI and launcher variants are
+build/profile choices, not separate module names. Legacy aliases may exist on a
+site but are not part of the standard.
 
-- `gromacs/2026.3` and `gromacs/2026.3-dtk26.04-z100` use self-built GCC
-  16.2/OpenMPI 5.0.11 with DTK 26.04, HIP and rocFFT for gfx906.
-- `gromacs/2026.3-pmpi` and its DTK/Z100 variant use platform OpenMPI 4.1.5.
-
-The upstream documentation currently describes GROMACS 2026.4. This is a
-patch-level difference; validate the existing 2026.3 binary before considering
-a rebuild.
+The canonical 2026.4 reference module uses the official 2026.4 source with
+OpenMPI 5.0.11 + UCX + HIP and rocFFT for gfx906. PMPI is an optional
+compatibility profile, not a module. The upstream documentation may describe a
+newer release; validate the provided module before considering a rebuild.
 
 ## Case contract
 
@@ -57,7 +57,7 @@ is a site hint, not live evidence.
 tolerance checker. The scheduler state, platform exit status and workload
 `status=passed` are still checked separately.
 
-For the 2026.4 PMPI reference module, validation covered single-rank CPU/HIP,
+For the 2026.4 PMPI compatibility profile, validation covered single-rank CPU/HIP,
 two-rank CPU PME, two-GPU PME and two-node/four-rank/four-GPU execution with
 `mpirun` plus OB1 launcher arguments. PMPI multi-node also needed a hostfile and
 explicit `ib0` TCP/OOB interface selection. A larger 134,177-atom ADH reference
@@ -145,6 +145,9 @@ Observed on Kunshan:
 
 - the self-built OpenMPI 5 module connected ranks with `mpirun`; `srun` in that
   environment launched singleton ranks for GROMACS;
+- HCOLL can fail in handler setup on the ROCm/UCX path; keep it disabled for
+  GROMACS multi-rank (`OMPI_MCA_coll=^hcoll`). The reference OpenMPI 5 module
+  already sets this.
 - the PMPI module's platform OpenMPI 4.1.5 is not Slurm-PMI enabled. Its
   multi-rank path needed `mpirun` plus an MPI transport override. The reliable
   form was launcher arguments (`--mca pml ob1 --mca btl self,vader,tcp`), not

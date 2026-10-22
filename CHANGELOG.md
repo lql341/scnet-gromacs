@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 (2026-10-21)
+
+- Consolidate the module standard to one user-level module per application
+  version; backend/MPI variants are profiles, not module names.
+- Remove the extra 2026.4 Z100/PMPI module names from the reference inventory;
+  PMPI remains an optional compatibility profile selected by binary/environment.
+- Document HCOLL as disabled by default for GROMACS multi-rank and the ROCm/UCX
+  path.
+- Clarify the sublinear ADH 134k scaling result as expected, not a defect.
+
 ## 0.8.1 (2026-10-21)
 
 - Record the larger 134,177-atom ADH GPU-aware result: direct communication was
@@ -20,7 +30,7 @@
 
 ## 0.7.0 (2026-10-21)
 
-- Add formal 2026.4 PMPI reference module coverage and single-node validation
+- Add formal 2026.4 PMPI compatibility-profile coverage and single-node validation
   (single-rank CPU/HIP, two-rank CPU PME, two-GPU PME).
 - Add launcher-argument support and document the PMPI OB1 fallback as a
   site-configurable transport, not a default.

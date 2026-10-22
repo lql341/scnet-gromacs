@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.8.1
+Current release: 0.9.0
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -49,16 +49,22 @@ The skill does not bundle GROMACS. A blank SCNet account must provide a site
 module or its own build. Coverage below means the path was exercised on the
 reference environment; it is not a guarantee for every account or cluster.
 
-| GROMACS | CPU | HIP | PME | multi-rank PME | multi-GPU | multi-node | PMPI |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026.3 | yes | yes | yes | yes | yes | yes | yes |
-| 2026.4 | yes | yes | yes | yes | yes | yes | yes |
+| GROMACS | CPU/HIP | PME | multi-rank PME | multi-GPU | multi-node |
+| --- | --- | --- | --- | --- | --- |
+| 2026.3 | yes | yes | yes | yes | yes |
+| 2026.4 | yes | yes | yes | yes | yes |
 
-The 2026.4 reference builds came from the official 2026.4 source and were
-exercised through user-level reference modules. The 2026.4 PMPI variant was
-validated single-node and on two nodes/four ranks/four GPUs. These are user-level
-modules only; system-wide publication is out of scope, and a blank account must
-build or obtain its own. See
+The standard is one user-level module per application version, for example
+`gromacs/2026.4`. Backend/MPI variants are build/profile choices, not separate
+module names. The canonical 2026.4 reference module uses the official 2026.4
+source with OpenMPI 5 + UCX + HIP.
+
+PMPI is an optional compatibility profile, not a module. It was validated
+single-node and on two nodes/four ranks/four GPUs, but it is slower than the
+OpenMPI 5 UCX path. Use it only when the platform MPI is required.
+
+These are user-level modules only; system-wide publication is out of scope, and
+a blank account must build or obtain its own. See
 [references/version-coverage.md](references/version-coverage.md) for the basis,
 multi-node/UCX findings and the minimum evidence needed for a new account.
 
@@ -134,6 +140,10 @@ Observed launcher behavior on Kunshan:
   `UCX_NET_DEVICES` to the working HCA made UCX pass and outperform the OB1/TCP
   fallback. OB1 is a fallback, not a universal best practice; keep the
   transport/HCA choice site-configurable.
+
+HCOLL is disabled by the reference OpenMPI 5 module. Keep it off for GROMACS
+(`OMPI_MCA_coll=^hcoll`), especially for GPU-aware experiments; the ROCm path
+failed in HCOLL handler setup before that was disabled.
 
 These are reference-site observations, not universal launcher recommendations.
 For cross-node runs, set `NODES`, `MPI_RANKS`, `MPI_RANKS_PER_NODE` and, if
@@ -249,9 +259,10 @@ not a default. Forced GPU-aware MPI was unusably slow; do not enable it without
 measurement.
 
 A larger ADH benchmark, 134,177 atoms, 200 steps, measured 21.1 ns/day on one
-GPU, 22.7 on two GPUs, 28.7 on four GPUs and 27.8 on two nodes/four GPUs. It
-scales better than the tiny cases but remains sublinear; this is not a production
-benchmark.
+GPU, 22.7 on two GPUs (1.07x), 28.7 on four GPUs (1.36x) and 27.8 on two
+nodes/four GPUs. The speedup is not linear; this is expected for a 134k-atom
+system where communication and PME decomposition dominate. It is not a bug and
+not a production benchmark.
 
 A ROCm-enabled UCX/OpenMPI build was also tested. GROMACS detected GPU-aware MPI
 (`MPI library: MPI (GPU-aware: HIP)` and `GPU direct communication will be used`),

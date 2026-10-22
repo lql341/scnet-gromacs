@@ -512,6 +512,10 @@ def main(argv=None):
         )
         binary = args.binary or profile.get("GROMACS_BINARY") or "gmx_mpi"
         env_script = args.env_script or profile.get("GROMACS_ENV_SCRIPT", "")
+        if not hip_module:
+            hip_module = cpu_module
+        if not cpu_module:
+            cpu_module = hip_module
         gpu_arch = profile.get("GPU_ARCH")
         expect_version = profile.get("GROMACS_EXPECT_VERSION")
         module_path = profile.get("GROMACS_MODULEPATH", "")

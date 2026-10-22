@@ -45,9 +45,11 @@ ADH benchmark, 134,177 atoms, 200 steps, 2026.4:
 | 4 GPUs, one node | 28.7 ns/day |
 | 4 GPUs, two nodes | 27.8 ns/day |
 
-The larger system scales better than Lysozyme but is still sublinear; two nodes
-were slightly slower than one four-GPU node at this size. This is a reference
-observation, not a production benchmark.
+The larger system scales better than Lysozyme but is still sublinear
+(1 GPU→2 GPU is 1.07x; 1→4 is 1.36x); two nodes were slightly slower than one
+four-GPU node at this size. This is expected for a 134k-atom system where
+communication and PME decomposition matter; it is not a bug and not a production
+benchmark.
 
 ## Cross-node transport check
 

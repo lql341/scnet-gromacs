@@ -2,14 +2,13 @@
 
 ## 目标事实
 
-昆山当前 module 包含 GROMACS 2026.3：
+参考清单遵循**每个应用版本一个用户级 module**：`gromacs/2026.3` 和
+`gromacs/2026.4`。后端、MPI 和 launcher 变体是构建/profile 选择，不拆成
+独立 module 名。站点上可能存在历史别名，但不是标准的一部分。
 
-- `gromacs/2026.3` 和 `gromacs/2026.3-dtk26.04-z100` 使用自建 GCC 16.2、
-  OpenMPI 5.0.11、DTK 26.04、HIP、rocFFT，目标为 gfx906。
-- `gromacs/2026.3-pmpi` 及其 DTK/Z100 变体使用平台 OpenMPI 4.1.5。
-
-上游官方文档当前已是 GROMACS 2026.4，因此这是 patch 版本差异；先验证现有
-2026.3 二进制，再决定是否值得重编。
+2026.4 规范参考 module 使用官方 2026.4 源码 + OpenMPI 5.0.11 + UCX + HIP，
+rocFFT，目标 gfx906。PMPI 是可选兼容 profile，不是 module。上游文档可能
+描述更新版本；先验证已有 module，再决定是否重编。
 
 ## Case 契约
 
@@ -49,7 +48,7 @@ PP/PME 是否真正在设备上执行，仍由目标节点探针和日志决定�
 `--mode both` 会提交 CPU 和 HIP，下载两套结果并运行容差检查；调度器状态、平台
 退出码和 workload `status=passed` 仍分别检查。
 
-2026.4 PMPI 参考 module 验证覆盖单 rank CPU/HIP、双 rank CPU PME、双 GPU PME
+2026.4 PMPI 兼容 profile 验证覆盖单 rank CPU/HIP、双 rank CPU PME、双 GPU PME
 和双节点/4 rank/4 GPU，使用 `mpirun` 加 OB1 启动器参数。PMPI 多节点还需要
 hostfile 和显式 `ib0` TCP/OOB 接口选择。更大规模的 134,177 原子 ADH 参考运行
 记录在性能观察中，扩展性好于微 case 但仍为次线性，不是生产 benchmark。
@@ -123,6 +122,8 @@ GPU 数量。这些事实不能从申请的分配资源推断。
 
 - 自建 OpenMPI 5 module 用 `mpirun` 能连接 rank；该环境下 `srun` 为 GROMACS
   启动了彼此独立的 singleton rank；
+- HCOLL 在 ROCm/UCX 路径上可能在 handler setup 阶段失败；GROMACS 多 rank
+  应保持关闭（`OMPI_MCA_coll=^hcoll`）。参考 OpenMPI 5 module 已默认关闭。
 - PMPI module 的平台 OpenMPI 4.1.5 没有 Slurm PMI 支持。多 rank 需要
   `mpirun` 加 MPI transport 覆盖，例如 `OMPI_MCA_pml=ob1`，以避开
   UCX/InfiniBand abort；
