@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.9.4
+Current release: 0.9.5
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -76,6 +76,18 @@ GROMACS_GPU_MODULE=""
 GROMACS_BINARY=/absolute/path/to/gmx_mpi
 GROMACS_ENV_SCRIPT=/absolute/path/to/env.sh
 ```
+
+## First use
+
+Users who have not enabled SCNet compute should read
+[references/first-use.md](references/first-use.md) first. Check local readiness:
+
+```bash
+python3 scripts/doctor.py
+```
+
+`doctor.py` is local and read-only; `--online` delegates only to the read-only
+`scnet-hpc doctor`.
 
 ## Workflow
 

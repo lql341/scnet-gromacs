@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.5 (2026-10-21)
+
+- Add a first-use reference and local read-only `doctor.py` for new SCNet
+  accounts: account/resource activation, credentials, shared credential store,
+  module readiness and offline dry-run.
+- Link the first-use path from README, SKILL and the optional runner guidance.
+
 ## 0.9.4 (2026-10-21)
 
 - Clarify single-skill entry: users load only scnet-gromacs; scnet-hpc is an

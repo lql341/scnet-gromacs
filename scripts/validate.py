@@ -59,6 +59,7 @@ def check_shell_syntax():
 def check_python_syntax():
     for relative in (
         "scripts/compare_gromacs_energy.py",
+        "scripts/doctor.py",
         "contrib/run_openapi.py",
         "scripts/validate.py",
     ):

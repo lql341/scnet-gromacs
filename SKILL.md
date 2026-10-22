@@ -6,7 +6,9 @@ description: Validate GROMACS modules on SCNet CPU and Hygon DCU/HIP compute nod
 # SCNet GROMACS
 
 Use this skill for GROMACS module validation and small CPU/HIP smoke runs on
-SCNet. Read [references/validation.md](references/validation.md) first.
+SCNet. Read [references/validation.md](references/validation.md) and, for a
+first-time SCNet user, [references/first-use.md](references/first-use.md).
+Run `python3 scripts/doctor.py` before configuring or submitting.
 
 ## Rules
 

@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.9.4
+当前版本：0.9.5
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -65,6 +65,18 @@ GROMACS_GPU_MODULE=""
 GROMACS_BINARY=/absolute/path/to/gmx_mpi
 GROMACS_ENV_SCRIPT=/absolute/path/to/env.sh
 ```
+
+## 首次使用
+
+尚未开通 SCNet 算力的用户先读 [references/first-use.md](references/first-use.md)。
+本地只读检查：
+
+```bash
+python3 scripts/doctor.py
+```
+
+`doctor.py` 不读取密钥、不提交作业；`--online` 只委托只读的
+`scnet-hpc doctor`。
 
 ## 工作流
 
