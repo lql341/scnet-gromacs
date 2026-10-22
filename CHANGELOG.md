@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.1 (2026-10-21)
+
+- Correct the user-level module name to include the backend version and target:
+  `gromacs/2026.4-dtk26.04-z100`, still one module per application version.
+- Remove the plain `gromacs/2026.4` reference module and keep PMPI as an
+  optional profile rather than a module name.
+- Align the template and coverage docs with the DTK/target naming convention.
+
 ## 0.9.0 (2026-10-21)
 
 - Consolidate the module standard to one user-level module per application

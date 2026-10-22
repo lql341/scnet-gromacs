@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-当前版本：0.9.0
+当前版本：0.9.1
 
 在 SCNet 计算节点上验证现有 GROMACS module，使用一个很小且确定性的分子动力学
 case。流程坚持远端优先：module 加载、`grompp`、`mdrun`、设备检查和数值比较
@@ -46,7 +46,7 @@ bundled case 只是 smoke test。它们覆盖部分 PME 分解、GPU-aware MPI �
 | 2026.3 | 是 | 是 | 是 | 是 | 是 |
 | 2026.4 | 是 | 是 | 是 | 是 | 是 |
 
-标准是**每个应用版本一个用户级 module**，例如 `gromacs/2026.4`。后端/MPI
+标准是**每个应用版本一个用户级 module**，例如 `gromacs/2026.4-dtk26.04-z100`。后端/MPI
 变体是构建/profile 选择，不拆成独立 module 名。2026.4 规范参考 module 使用
 官方源码 + OpenMPI 5 + UCX + HIP。
 

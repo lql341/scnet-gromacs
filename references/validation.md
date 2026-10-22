@@ -3,8 +3,9 @@
 ## Target facts
 
 The reference inventory follows one user-level module per application version:
-`gromacs/2026.3` and `gromacs/2026.4`. Backend, MPI and launcher variants are
-build/profile choices, not separate module names. Legacy aliases may exist on a
+`gromacs/2026.3-dtk26.04-z100` and `gromacs/2026.4-dtk26.04-z100`.
+Backend, MPI and launcher variants are build/profile choices, not separate
+module names. Legacy aliases may exist on a
 site but are not part of the standard.
 
 The canonical 2026.4 reference module uses the official 2026.4 source with

@@ -2,8 +2,8 @@
 
 ## 目标事实
 
-参考清单遵循**每个应用版本一个用户级 module**：`gromacs/2026.3` 和
-`gromacs/2026.4`。后端、MPI 和 launcher 变体是构建/profile 选择，不拆成
+参考清单遵循**每个应用版本一个用户级 module**：
+`gromacs/2026.3-dtk26.04-z100` 和 `gromacs/2026.4-dtk26.04-z100`。后端、MPI 和 launcher 变体是构建/profile 选择，不拆成
 独立 module 名。站点上可能存在历史别名，但不是标准的一部分。
 
 2026.4 规范参考 module 使用官方 2026.4 源码 + OpenMPI 5.0.11 + UCX + HIP，

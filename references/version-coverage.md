@@ -2,7 +2,7 @@
 
 This is a coverage declaration for the reference environment, not a bundled
 GROMACS distribution. The standard is **one user-level module per application
-version**, for example `gromacs/2026.3` and `gromacs/2026.4`. Backend, MPI and
+version**, for example `gromacs/2026.3-dtk26.04-z100` and `gromacs/2026.4-dtk26.04-z100`. Backend, MPI and
 launcher variants are build/profile choices, not separate module names. The
 reference modules are user-level only; system-wide publication is out of scope.
 

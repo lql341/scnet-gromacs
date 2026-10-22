@@ -2,7 +2,7 @@
 
 English | [中文](README_CN.md)
 
-Current release: 0.9.0
+Current release: 0.9.1
 
 Validate an existing GROMACS module on SCNet compute nodes with a tiny,
 deterministic molecular-dynamics case. The workflow is remote-first: module
@@ -55,7 +55,7 @@ reference environment; it is not a guarantee for every account or cluster.
 | 2026.4 | yes | yes | yes | yes | yes |
 
 The standard is one user-level module per application version, for example
-`gromacs/2026.4`. Backend/MPI variants are build/profile choices, not separate
+`gromacs/2026.4-dtk26.04-z100`. Backend/MPI variants are build/profile choices, not separate
 module names. The canonical 2026.4 reference module uses the official 2026.4
 source with OpenMPI 5 + UCX + HIP.
 
